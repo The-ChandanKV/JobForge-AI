@@ -1,0 +1,16 @@
+\documentclass[11pt]{article}
+\usepackage{geometry}
+\geometry{margin=0.75in}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\begin{document}
+{\LARGE\bfseries {{ name | tex }} }\par
+{% for fact in contact %}{{ fact.value | tex }}{% if not loop.last %} \enspace | \enspace {% endif %}{% endfor %}
+{% for title, facts in sections if facts %}
+
+\section*{ {{- title -}} }
+{% for fact in facts %}
+{{ fact.value | tex }}\par
+{% endfor %}
+{% endfor %}
+\end{document}

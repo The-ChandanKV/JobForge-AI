@@ -1,0 +1,139 @@
+# Test report
+
+## One-click approval and submission
+
+Verified on Windows on November 23, 2026. Development traffic used the local synthetic employer and mocked HTTP. Production employer dispatch stayed disabled throughout verification.
+
+**Final result: 41 passed, 0 failed in 53.11 seconds.** The suite reported the existing Starlette test-client deprecation warning.
+
+```powershell
+Set-Location -LiteralPath 'D:\JOBFORGE AI'
+$env:JOBFORGE_BROWSER_EXECUTABLE = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:OLLAMA_BASE_URL = 'http://127.0.0.1:11435'
+$env:JOBFORGE_TEST_OLLAMA = 'qwen2.5:1.5b'
+node --check jobforge/static/dashboard.js
+./.venv/Scripts/python.exe -m pytest -q
+./.venv/Scripts/python.exe -m alembic upgrade head
+./.venv/Scripts/python.exe -m alembic check
+./.venv/Scripts/python.exe -m alembic current
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+The Chrome end-to-end test covers a scheduled synthetic preparation, real PDF, review, one-click final approval, worker dispatch, durable receipt, duplicate approval request, and outcome notification. The regression suite checks concurrent clicks, all-or-nothing bulk review, unsupported providers, eligibility and missing information, and the legacy synthetic workflow. It also verifies that resume, profile, answers and destination changes block stale approval, that a modified approval hash blocks dispatch, and that only read-only preflight retries occur after a timeout.
+
+The Greenhouse contract test uses mocked HTTP and checks that the provider receives the exact approved fields and PDF only after a final approval. The prior standing-policy test now checks that even valid legacy policy data cannot queue or dispatch an application. The transport code for legacy policy dispatch was removed.
+
+The SQLite database was backed up and checked before migration. Migration 0004 adds the snapshot, approvals, tasks, and notification records and disarms inherited standing-dispatch settings. Alembic reported no outstanding schema operations. Both Windows logon tasks restarted, the browser smoke passed against the task-hosted dashboard, and the running worker reported a 60-minute schedule with dry-run enabled.
+
+| Area | Changed files |
+|---|---|
+| Backend and queue | `jobforge/api.py`, `jobforge/applications.py`, `jobforge/models.py`, `jobforge/notifications.py`, `jobforge/schemas.py`, `jobforge/submission.py`, `jobforge/worker.py` |
+| Migration and native notifications | `migrations/versions/0004_final_approval.py`, `scripts/review-notification.ps1` |
+| Dashboard | `jobforge/static/index.html`, `jobforge/static/dashboard.js` |
+| Tests | `tests/conftest.py`, `tests/test_autonomy.py`, `tests/test_dashboard_e2e.py`, `tests/test_final_submission.py` |
+| Documentation | `README.md`, `IMPLEMENTATION_STATUS.md`, `docs/APPROVAL_AND_SUBMISSION.md`, `docs/AUTONOMY_ARCHITECTURE.md`, `docs/SETUP.md`, `docs/SUBMISSION_PERMISSIONS.md`, `docs/TEST_REPORT.md` |
+
+Employer-authorized Greenhouse sandbox behavior, visible Windows taskbar alert delivery, and SMTP delivery remain unverified. Dashboard notification persistence and desktop and email batching decisions are independently testable. [Approval workflow and provider capabilities](APPROVAL_AND_SUBMISSION.md)
+
+## Autonomy upgrade
+
+Windows verification on November 22, 2026 used the workspace's Python 3.12, Chrome, Tectonic, a real local Ollama endpoint, and SQLite. Production employer submission remained disabled. The only dispatch transports exercised were browser simulations and a mocked employer HTTP adapter.
+
+### Automated checks
+
+```powershell
+Set-Location -LiteralPath 'D:\JOBFORGE AI'
+$env:JOBFORGE_BROWSER_EXECUTABLE = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:OLLAMA_BASE_URL = 'http://127.0.0.1:11435'
+$env:JOBFORGE_TEST_OLLAMA = 'qwen2.5:1.5b'
+node --check jobforge/static/dashboard.js
+./.venv/Scripts/python.exe -m alembic upgrade head
+./.venv/Scripts/python.exe -m alembic check
+./.venv/Scripts/python.exe -m pytest -q
+./.venv/Scripts/python.exe -m scripts.evaluate_models qwen2.5:1.5b qwen2.5:3b
+```
+
+The final upgraded suite passed **30 tests in 48.78 seconds**, with one existing Starlette test-client deprecation warning. It checks a due scheduled run that discovers, compiles and prepares a synthetic job, plus approved submission and idempotent replay. It covers missing answers, a known textarea, blocked consent and human verification fixtures, a durable receipt when the confirmation page is unavailable, and continued use of the same PDF after an interrupted preparation. Further tests cover an actual process crash with controlled lease expiry, missed-run coalescing, pause/resume and cancellation, a failed source alongside a healthy source, bounded compilation retries, invalid LaTeX, mutated numeric claims, Ollama timeout and missing model fallback, and exact employer policy enforcement against mocked HTTP. Windows logon and boot task definitions are validated through the native Task Scheduler PowerShell module.
+
+### Native Windows tasks
+
+```powershell
+./scripts/install-windows-tasks.ps1 -Plan
+./scripts/install-windows-tasks.ps1 -Boot -Plan
+./scripts/install-windows-tasks.ps1
+Start-ScheduledTask -TaskName 'JobForge AI Dashboard'
+Start-ScheduledTask -TaskName 'JobForge AI Worker'
+Get-ScheduledTaskInfo -TaskName 'JobForge AI Worker'
+Invoke-RestMethod http://127.0.0.1:8000/health
+./scripts/install-windows-tasks.ps1 -Repair
+```
+
+The native logon tasks registered successfully and the dashboard returned HTTP 200 with the worker reporting a live heartbeat and the local model available. A queued dry-run tick completed under the scheduled process. The restart setting alone failed after a forced kill of the worker child on this host. A repeating watchdog relaunched the stopped process. A second forced-exit test verified a new child process and fresh heartbeat without a manual restart. A Chrome smoke test of the task-hosted Automation Control Center also passed. Boot registration stopped at the installer privilege check. No reboot, logout or sleep transition was performed.
+
+### Model comparison
+
+Both local models ranked the target project first on all five synthetic fixtures and compiled all five to clean, factual PDFs. The median was 2.30 seconds for Qwen2.5 1.5B and 4.08 seconds for Qwen2.5 3B, including compilation. [Evaluation method and limitations](AI_MODEL_EVALUATION.md)
+
+### Changed files
+
+| Area | Files |
+|---|---|
+| Job intake, requirements, and resumes | `jobforge/providers.py`, `jobforge/matching.py`, `jobforge/resumes.py`, `jobforge/llm.py` |
+| Execution, state and policy | `jobforge/worker.py`, `jobforge/models.py`, `jobforge/schemas.py`, `jobforge/permissions.py`, `jobforge/greenhouse.py`, `jobforge/applications.py`, `jobforge/api.py`, `migrations/versions/0003_automation_checkpoints.py` |
+| Dashboard and launch | `jobforge/static/index.html`, `jobforge/static/dashboard.js`, `jobforge/windows.py`, `scripts/install-windows-tasks.ps1`, `.env.example`, `docker-compose.yml` |
+| Tests and evaluation | `tests/test_autonomy.py`, `tests/test_dashboard_e2e.py`, `tests/fixtures/model_evaluation.json`, `scripts/evaluate_models.py` |
+| Documentation | `README.md`, `IMPLEMENTATION_STATUS.md`, `docs/SETUP.md`, `docs/TEST_REPORT.md`, `docs/AUTONOMY_ARCHITECTURE.md`, `docs/SCHEDULER_RECOVERY.md`, `docs/AI_MODEL_EVALUATION.md`, `docs/SUBMISSION_PERMISSIONS.md` |
+
+The machine-local ignored `.env` records the existing Ollama endpoint and absolute compiler, Node, and browser paths so the installed tasks can run outside the development shell.
+
+## Baseline verification
+
+Verification date: November 22, 2026. Windows native, Python 3.12, SQLite, Playwright 1.65.2 with installed Chrome, Tectonic 0.17.0, and Ollama 0.40.17.
+
+## Native application and automated tests
+
+Commands run from the project directory:
+
+```powershell
+.venv/Scripts/python.exe -m jobforge.resumes
+.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe -m alembic check
+.venv/Scripts/python.exe -m pip check
+node --check jobforge/static/dashboard.js
+$env:JOBFORGE_BROWSER_EXECUTABLE='C:/Program Files/Google/Chrome/Application/chrome.exe'
+$env:OLLAMA_BASE_URL='http://127.0.0.1:11435'
+$env:JOBFORGE_TEST_OLLAMA='qwen2.5:1.5b'
+.venv/Scripts/python.exe -m pytest -q
+```
+
+Tectonic bootstrap completed for both templates. Alembic reported no unrepresented model changes. Python package resolution and JavaScript syntax checks passed. The baseline run reported **19 passed in 22.66 seconds**. Tests cover PDF/TXT/TEX extraction, verified fact exclusion and provenance, both real PDF builds and text extraction, controlled LaTeX edits, normalized board fixtures, deduplication and JD history, scoring and ambiguous eligibility, duplicate queue admission, authorization, local data export and deletion, and a browser workflow against independent Uvicorn and worker processes.
+
+The browser test checks scheduling, missing answers, preparation, PDF upload, approval before submit, mock confirmation and idempotent replay, timeline, manual job analysis, generated PDF preview, recompile, and overview counts. A security-hardening run caught a Chromium form-origin regression. The server now uses a same-origin referrer policy and the full browser workflow passed again. Test data stays in isolated SQLite files. The separate blank dashboard returned HTTP 200 on `http://127.0.0.1:8000/health` with dry-run enabled and a completed scheduled tick.
+
+## Live public discovery
+
+A separate SQLite instance called the public ATS endpoints directly, normalized their responses with JobForge adapters, ran the worker, and stored 1,272 listings. This was a point-in-time result. No company account or application credentials were used.
+
+| Board | Listings |
+|---|---:|
+| Greenhouse, Stripe | 777 |
+| Lever, Palantir | 308 |
+| Ashby, Ramp | 187 |
+
+The discovery run recorded zero errors, zero compiled resumes, and zero prepared applications with an empty profile. One official Lever job URL was also resolved through the vendored career-ops classifier and matched its stored listing identity.
+
+## Local model probes
+
+Ollama ran on loopback with cloud disabled. Two small local models were probed with the same synthetic profile and job description. SmolLM2 135M returned valid structured IDs, with a weaker relevance order. Qwen2.5 0.5B returned valid IDs, with the API project first and some unrelated facts still included. These were smoke probes on a single synthetic prompt. The default Qwen2.5 1.5B model passed the live structured-selection and one-page Tectonic PDF integration test with a verified synthetic profile.
+
+To include the real Tectonic plus Ollama integration test, point at a running local Ollama and install the named model first:
+
+```powershell
+$env:OLLAMA_BASE_URL='http://127.0.0.1:11434'
+$env:JOBFORGE_TEST_OLLAMA='qwen2.5:1.5b'
+.venv/Scripts/python.exe -m pytest -q
+```
+
+## Verification limits
+
+Docker Compose and PostgreSQL were unavailable on this Windows host. The authorized Greenhouse submission adapter was tested with mocked HTTP. No real application was submitted. No Anthropic, OpenAI-compatible paid provider, or SMTP call was made. The installed FastAPI test client emitted a Starlette deprecation warning for its use of httpx.

@@ -1,0 +1,74 @@
+x-app: &app
+  build: .
+  image: jobforge-local
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgresql+psycopg://jobforge:${POSTGRES_PASSWORD:-jobforge-local}@postgres:5432/jobforge
+    JOBFORGE_ACCESS_TOKEN: ${JOBFORGE_ACCESS_TOKEN:-}
+    JOBFORGE_MOCK_ORIGIN: http://backend:8000
+    LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+    OLLAMA_BASE_URL: ${COMPOSE_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    OPENAI_MODEL: ${OPENAI_MODEL:-}
+    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    JOBFORGE_GREENHOUSE_AUTHORIZED: ${JOBFORGE_GREENHOUSE_AUTHORIZED:-false}
+    JOBFORGE_GREENHOUSE_VERIFICATION_REFERENCE: ${JOBFORGE_GREENHOUSE_VERIFICATION_REFERENCE:-}
+    AUTOMATION_MODE: ${AUTOMATION_MODE:-AUTONOMOUS_PREPARATION}
+    JOBFORGE_GREENHOUSE_BOARD: ${JOBFORGE_GREENHOUSE_BOARD:-}
+    JOBFORGE_GREENHOUSE_KEY: ${JOBFORGE_GREENHOUSE_KEY:-}
+    JOBFORGE_EMAIL_ENABLED: ${JOBFORGE_EMAIL_ENABLED:-false}
+    JOBFORGE_SMTP_HOST: ${JOBFORGE_SMTP_HOST:-}
+    JOBFORGE_SMTP_PORT: ${JOBFORGE_SMTP_PORT:-465}
+    JOBFORGE_SMTP_USER: ${JOBFORGE_SMTP_USER:-}
+    JOBFORGE_SMTP_PASSWORD: ${JOBFORGE_SMTP_PASSWORD:-}
+    JOBFORGE_SMTP_FROM: ${JOBFORGE_SMTP_FROM:-}
+    JOBFORGE_NOTIFICATION_EMAIL: ${JOBFORGE_NOTIFICATION_EMAIL:-}
+  extra_hosts:
+    - host.docker.internal:host-gateway
+
+services:
+  backend:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+  worker:
+    <<: *app
+    command: ["python", "-m", "jobforge.worker"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    stop_grace_period: 230s
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobforge
+      POSTGRES_DB: jobforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jobforge-local}
+    volumes:
+      - jobforge_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobforge -d jobforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  ollama:
+    profiles: ["local-ai"]
+    image: ollama/ollama
+    restart: unless-stopped
+    volumes:
+      - jobforge_models:/root/.ollama
+volumes:
+  jobforge_db:
+  jobforge_models:

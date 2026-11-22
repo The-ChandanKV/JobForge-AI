@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>JobForge AI</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/dashboard.js"></script>
+</head>
+<body>
+  <aside class="rail">
+    <a class="brand" href="#overview"><span class="mark" aria-hidden="true">JF</span><span>JobForge <small>AI</small></span></a>
+    <div class="rail-label">WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <a href="#overview" data-page="overview"><i>▦</i>Overview</a>
+      <a href="#jobs" data-page="jobs"><i>⌕</i>Job Discovery</a>
+      <a href="#studio" data-page="studio"><i>▤</i>Resume Studio</a>
+      <a href="#applications" data-page="applications"><i>↗</i>Applications</a>
+      <a href="#approvals" data-page="approvals"><i>✓</i>Approval Queue<span id="queue-count"></span></a>
+      <a href="#exceptions" data-page="exceptions"><i>!</i>Exception Queue</a>
+      <a href="#notifications" data-page="notifications"><i>◉</i>Notifications<span id="notification-count"></span></a>
+    </nav>
+    <div class="rail-label">PREFERENCES</div>
+    <nav aria-label="System navigation">
+      <a href="#automation" data-page="automation"><i>◷</i>Automation</a>
+      <a href="#profile" data-page="profile"><i>◎</i>Profile</a>
+      <a href="#settings" data-page="settings"><i>⚙</i>Settings</a>
+    </nav>
+    <div class="rail-foot"><span class="local-dot"></span>Local workspace</div>
+  </aside>
+  <div class="workspace">
+    <header class="top"><span id="crumb">Overview</span><div class="top-actions"><button id="theme" type="button" class="quiet" aria-label="Toggle light or dark theme">☼</button><button id="refresh" type="button" class="quiet">Refresh</button></div></header>
+    <main id="content" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
+  </div>
+  <output id="message" role="status" hidden></output>
+</body>
+</html>

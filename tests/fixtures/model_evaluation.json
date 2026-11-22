@@ -1,0 +1,32 @@
+[
+  {
+    "role": "Graduate Backend Engineer",
+    "description": "Required skills: Python, FastAPI, SQL.\nPreferred: Docker.",
+    "required": ["Python", "FastAPI", "SQL"], "preferred": ["Docker"], "eligibility": "ELIGIBLE",
+    "target": "Built a FastAPI and Python API with SQL persistence."
+  },
+  {
+    "role": "Entry-level Data Engineer",
+    "description": "Required skills: SQL, Spark, Airflow.\nPreferred: 5 years of experience and Kafka.",
+    "required": ["SQL", "Spark", "Airflow"], "preferred": ["Kafka"], "eligibility": "ELIGIBLE",
+    "target": "Developed a Spark ETL job scheduled with Airflow that writes to SQL."
+  },
+  {
+    "role": "Machine Learning Intern",
+    "description": "Required skills: Python, PyTorch.\nPreferred: Pandas.\nMust be authorized to work in Canada.",
+    "required": ["Python", "PyTorch"], "preferred": ["Pandas"], "eligibility": "NEEDS_REVIEW",
+    "target": "Created a Python and PyTorch classifier for a coursework project."
+  },
+  {
+    "role": "Full-stack Engineer",
+    "description": "Required skills: React, TypeScript, Node.js.\nPreferred: PostgreSQL.\nMust have at least 5 years of professional experience.",
+    "required": ["React", "TypeScript", "Node.js"], "preferred": ["PostgreSQL"], "eligibility": "INELIGIBLE",
+    "target": "Implemented a React UI and a TypeScript Node.js API."
+  },
+  {
+    "role": "Graduate Data Analyst",
+    "description": "Required skills: Python, SQL.\nPreferred: Pandas, Spark.\nMust hold an active government clearance.",
+    "required": ["Python", "SQL"], "preferred": ["Pandas", "Spark"], "eligibility": "NEEDS_REVIEW",
+    "target": "Wrote Python and SQL to validate an educational data set."
+  }
+]
