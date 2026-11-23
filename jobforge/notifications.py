@@ -5,7 +5,6 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
@@ -45,8 +44,7 @@ def send_email(subject, body):
 def desktop_notification(message):
     if sys.platform != "win32" or os.getenv("JOBFORGE_DISABLE_DESKTOP_NOTIFICATIONS") == "true":
         return
-    script = Path(__file__).resolve().parent.parent / "scripts" / "review-notification.ps1"
-    subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-File", str(script), message],
+    subprocess.Popen([sys.executable, "-m", "jobforge.windows_notice", "--record", message],
                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

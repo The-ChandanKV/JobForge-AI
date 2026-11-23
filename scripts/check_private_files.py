@@ -9,7 +9,7 @@ PATTERNS = {
     "GitHub token": rb"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b",
     "OpenAI token": rb"\bsk-(?:proj-)?[A-Za-z0-9_-]{35,}\b",
     "AWS key ID": rb"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b",
-    "credential assignment": rb"(?im)^(?:JOBFORGE_ACCESS_TOKEN|JOBFORGE_GREENHOUSE_KEY|JOBFORGE_SMTP_PASSWORD|OPENAI_API_KEY|ANTHROPIC_API_KEY)\s*=\s*[^\s#]{8,}",
+    "credential assignment": rb"(?im)^(?:JOBFORGE_ACCESS_TOKEN|JOBFORGE_GREENHOUSE_KEY|JOBFORGE_SMTP_PASSWORD|OPENAI_API_KEY|ANTHROPIC_API_KEY)[ \t]*=[ \t]*[^\s#]{8,}",
 }
 
 
