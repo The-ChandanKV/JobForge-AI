@@ -1,3 +1,10 @@
+FROM node:24-bookworm-slim AS frontend
+WORKDIR /build
+COPY frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.12-slim-bookworm
 ARG TARGETARCH
 ARG TECTONIC_VERSION=0.15.0
@@ -19,6 +26,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && python -m playwright install --with-deps chromium
 RUN useradd --create-home --uid 10001 jobforge && mkdir /data && chown jobforge:jobforge /data
 COPY . .
+COPY --from=frontend /build/dist ./frontend/dist
 USER jobforge
 RUN python -m jobforge.resumes
 EXPOSE 8000

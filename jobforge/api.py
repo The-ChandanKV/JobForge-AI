@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import PurePath
 from typing import Literal
+from urllib.parse import quote
 
 import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -39,6 +40,10 @@ async def lifespan(_):
 app = FastAPI(title="JobForge AI", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "backend", "testserver"])
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+FRONTEND_DIST = ROOT.parent / "frontend" / "dist"
+FRONTEND_READY = (FRONTEND_DIST / "index.html").is_file()
+if FRONTEND_READY:
+    app.mount("/ui-assets", StaticFiles(directory=FRONTEND_DIST), name="ui-assets")
 
 
 @app.middleware("http")
@@ -100,11 +105,26 @@ def health():
 
 
 @app.get("/")
+@app.get("/jobs")
+@app.get("/pipeline")
+@app.get("/resume-studio")
+@app.get("/automation")
+@app.get("/approvals")
+@app.get("/exceptions")
+@app.get("/history")
+@app.get("/analytics")
+@app.get("/settings")
+@app.get("/profile")
+@app.get("/notifications")
+@app.get("/legacy")
 def dashboard(request: Request):
     try:
         authorized(request)
     except HTTPException:
         return FileResponse(ROOT / "static" / "login.html")
+    frontend = FRONTEND_DIST / "index.html"
+    if request.url.path != "/legacy" and FRONTEND_READY and frontend.is_file():
+        return FileResponse(frontend)
     return FileResponse(ROOT / "static" / "index.html")
 
 
@@ -229,6 +249,23 @@ def upload(file: UploadFile = File()):
         detected = [f.model_copy(update={"source": f"upload:{original.id}"}).model_dump() for f in facts]
         row.facts = [*row.facts, *detected]
         return {"imported": len(detected), "upload": original.id}
+
+
+@app.get("/api/profile/uploads", dependencies=AUTH)
+def list_uploads():
+    with Session() as db:
+        rows = db.execute(select(Upload.id, Upload.name, Upload.created)
+                          .order_by(Upload.created.desc(), Upload.id)).mappings()
+        return [dict(row) for row in rows]
+
+
+@app.get("/api/profile/uploads/{upload_id}", dependencies=AUTH)
+def download_upload(upload_id: str):
+    with Session() as db:
+        upload = required(db, Upload, upload_id)
+        filename = quote(upload.name, safe="")
+        return Response(upload.blob, media_type="application/octet-stream",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"})
 
 
 @app.put("/api/settings", dependencies=AUTH)

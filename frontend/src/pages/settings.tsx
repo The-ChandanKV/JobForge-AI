@@ -1,0 +1,178 @@
+import { useState } from "react";
+import { Plus, Save, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import type { Fact, Options, Preferences, Profile, Source } from "../api";
+import { date, label, searchMatch } from "../domain";
+import { Details, Empty, Heading, Panel, Status } from "../shared";
+import type { PageProps } from "../shared";
+import { UploadForm } from "./studio";
+
+const categories = ["personal", "education", "experience", "skill", "project", "authorization", "certification", "other"];
+const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_keywords", "target_companies", "excluded_companies"];
+const preferenceChoices: Record<string, string[]> = {
+  work_modes: ["remote", "hybrid", "onsite"],
+  career_tracks: ["entry-level", "graduate", "backend", "full-stack", "data", "ai-ml", "internship"],
+};
+
+function listInput(current: Preferences, key: string) {
+  const value = current[key];
+  return Array.isArray(value) ? value.join(", ") : "";
+}
+
+export function ProfilePage(props: PageProps) {
+  const { state, mutate, busy } = props;
+  const [draft, setDraft] = useState<Profile>();
+  const [listDraft, setListDraft] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
+  const [unverified, setUnverified] = useState(false);
+  const [editing, setEditing] = useState<string>();
+  const [scope, setScope] = useState<string>();
+  const current = draft ?? state.profile;
+  const facts = current.facts.filter(fact => searchMatch(query, fact.label, fact.value, fact.category) &&
+    (!unverified || !fact.verified) && (!scope || fact.source === scope));
+  const sources = [...new Set(current.facts.map(fact => fact.source))];
+  function updateFact(id: string, changes: Partial<Fact>) {
+    setDraft({ ...current, facts: current.facts.map(fact => fact.id === id ? {...fact, ...changes} : fact) });
+  }
+
+  function updatePreference(key: string, value: Preferences[string]) {
+    setDraft({...current, preferences: {...current.preferences, [key]: value}});
+  }
+
+  async function saveProfile() {
+    const preferences = {...current.preferences};
+    for (const [key, text] of Object.entries(listDraft)) preferences[key] = text.split(",").map(item => item.trim()).filter(Boolean);
+    const result = await mutate<Profile>("/api/profile", "PUT", {...current, preferences}, "Profile saved.");
+    if (result) {setDraft(undefined); setListDraft({});}
+  }
+  return <>
+    <Heading title="Candidate profile" description="Manage your job preferences and verify facts against their original evidence.">
+      <Button type="submit" form="profile-form" disabled={busy || (!draft && !Object.keys(listDraft).length)}><Save size={16}/> Save profile</Button>
+    </Heading>
+    <div className="split-grid studio-top">
+      <Panel title="Profile coverage"><Details values={{ "verified facts": current.facts.filter(fact => fact.verified).length, "draft facts": current.facts.filter(fact => !fact.verified).length, total: current.facts.length }}/></Panel>
+      <Panel title="Import a resume">{draft || Object.keys(listDraft).length ? <p className="subtle">Save or discard your draft before importing another resume.</p> : <UploadForm {...props}/>}</Panel>
+    </div>
+    <form id="profile-form" className="content-grid" onSubmit={event => {event.preventDefault(); void saveProfile();}}>
+      <Panel title="Job preferences" caption="Use commas to separate roles, locations, and keywords.">
+        <div className="form-grid">{preferenceLists.map(key => {
+          const choices = preferenceChoices[key];
+          const values = current.preferences[key];
+          return choices ? <fieldset key={key}><legend>{label(key)}</legend><div className="inline">{choices.map(choice =>
+            <label className="check" key={choice}><input type="checkbox" checked={Array.isArray(values) && values.includes(choice)} onChange={event => {
+              const selected = Array.isArray(values) ? values : [];
+              updatePreference(key, event.target.checked ? [...selected, choice] : selected.filter(value => value !== choice));
+            }}/>{label(choice)}</label>)}</div></fieldset>
+            : <label key={key}>{label(key)}<input value={listDraft[key] ?? listInput(current.preferences, key)}
+              onChange={event => setListDraft({...listDraft, [key]: event.target.value})}/></label>;
+        })}
+        {(["min_salary", "recent_days", "maximum_mandatory_years"] as const).map(key => <label key={key}>{label(key)}
+          <input type="number" min={key === "recent_days" ? 1 : 0} max={key === "recent_days" ? 365 : key === "maximum_mandatory_years" ? 30 : undefined}
+            value={String(current.preferences[key] ?? "")} onChange={event => updatePreference(key, event.target.value === "" ? null : Number(event.target.value))}/></label>)}
+        <label>Salary currency<input maxLength={3} value={String(current.preferences.salary_currency ?? "")} onChange={event => updatePreference("salary_currency", event.target.value)}/></label>
+        <label>Relocation<input maxLength={160} value={String(current.preferences.relocation ?? "")} onChange={event => updatePreference("relocation", event.target.value)}/></label>
+        <label className="check"><input type="checkbox" checked={Boolean(current.preferences.exclude_senior_roles)} onChange={event => updatePreference("exclude_senior_roles", event.target.checked)}/> Exclude senior roles</label></div>
+      </Panel>
+      <Panel title="Profile facts">
+        <div className="toolbar">
+          <label>Search facts<input type="search" value={query} onChange={event => setQuery(event.target.value)}/></label>
+          <label>Source<select value={scope ?? ""} onChange={event => setScope(event.target.value)}><option value="">All sources</option>{sources.map(source => <option key={source}>{source}</option>)}</select></label>
+          <label className="check"><input type="checkbox" checked={unverified} onChange={event => setUnverified(event.target.checked)}/> Unverified only</label>
+          <Button type="button" variant="outline" disabled={current.facts.length >= 220} onClick={() => {
+            const id = crypto.randomUUID().replaceAll("-", "");
+            setDraft({...current, facts: [{id, category:"other", label:"", value:"", verified:false, source:"manual", excerpt:""}, ...current.facts]});
+            setQuery(""); setScope(undefined); setEditing(id);
+          }}><Plus size={16}/> Add fact</Button>
+          {(draft || Object.keys(listDraft).length > 0) && <Button type="button" variant="ghost" onClick={() => {setDraft(undefined); setListDraft({});}}>Discard draft</Button>}
+        </div>
+        {facts.length ? <div className="fact-list">{facts.map(fact => <article className="fact" key={fact.id}>
+          {editing === fact.id ? <div className="stack">
+            <label>Category<select value={fact.category} onChange={event => updateFact(fact.id, {category: event.target.value, verified: false})}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
+            <label>Label<input required maxLength={100} value={fact.label} onChange={event => updateFact(fact.id, {label: event.target.value, verified: false})}/></label>
+            <label>Value<textarea required maxLength={1500} value={fact.value} onChange={event => updateFact(fact.id, {value: event.target.value, verified: false})}/></label>
+          </div> : <div><strong>{fact.label || "New fact"}</strong><p className="preserve">{fact.value}</p></div>}
+          <p className="subtle">{label(fact.category)} · {fact.source}</p>
+          {fact.excerpt && <details><summary>Source excerpt</summary><p className="preserve">{fact.excerpt}</p></details>}
+          <div className="inline">
+            <label className="check"><input type="checkbox" checked={fact.verified} disabled={!fact.label.trim() || !fact.value.trim()} onChange={event => updateFact(fact.id, {verified:event.target.checked})}/> Verified</label>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(editing === fact.id ? undefined : fact.id)}>{editing === fact.id ? "Done" : "Edit"}</Button>
+            <Button type="button" size="icon" variant="ghost" aria-label={"Remove " + (fact.label || "new fact")} onClick={() => setDraft({...current, facts: current.facts.filter(item => item.id !== fact.id)})}><Trash2 size={15}/></Button>
+          </div>
+        </article>)}</div> : <Empty>No facts match this view.</Empty>}
+      </Panel>
+    </form>
+  </>;
+}
+
+const numbers = {
+  interval_minutes: [1, 1440], min_match_score: [0, 100], max_applications_per_day: [0, 100],
+  max_submissions_per_day: [0, 100], max_resume_generations_per_run: [0, 50], max_job_attempts: [1, 8],
+  notification_interval_minutes: [1, 1440],
+} as const;
+const toggles = ["enabled", "retry_failed_jobs", "exception_notifications", "desktop_notifications", "approval_email"] as const;
+
+export function Settings({ state, mutate, busy }: PageProps) {
+  const [draft, setDraft] = useState<Partial<Options>>({});
+  const current = {...state.options, ...draft};
+  const sources = current.sources;
+  function update<K extends keyof Options>(name: K, value: Options[K]) {
+    setDraft(previous => ({...previous, [name]: value}));
+  }
+  function sourceChange(index: number, changes: Partial<Source>) {
+    update("sources", sources.map((source, position) => position === index ? {...source, ...changes} : source));
+  }
+  return <>
+    <Heading title="Settings" description="Configure matching, discovery sources, resume generation, and automation.">
+      <Button type="submit" form="settings-form" disabled={busy || !Object.keys(draft).length}><Save size={16}/> Save settings</Button>
+    </Heading>
+    <form id="settings-form" className="content-grid" onSubmit={async event => {
+      event.preventDefault();
+      if (await mutate<Options>("/api/settings", "PUT", current, "Settings saved.")) setDraft({});
+    }}>
+      <div className="split-grid">
+        <Panel title="Automation and notifications">
+          <div className="form-grid">
+            {Object.entries(numbers).map(([key, [min, max]]) => {
+              const name = key as keyof typeof numbers;
+              return <label key={key}>{label(key)}<input type="number" min={min} max={max} required value={current[name]} onChange={event => update(name, event.target.valueAsNumber || 0)}/></label>;
+            })}
+            <label>Time zone<input required value={current.timezone} onChange={event => update("timezone", event.target.value)}/></label>
+            {toggles.map(name => <label className="check" key={name}><input type="checkbox" checked={current[name]} onChange={event => update(name, event.target.checked)}/>{label(name)}</label>)}
+          </div>
+        </Panel>
+        <Panel title="AI and resume generation">
+          <div className="stack">
+            <label>Model provider<select value={current.provider ?? ""} onChange={event => update("provider", event.target.value || null)}>
+              <option value="">Server default</option><option value="rules">Rules only</option><option value="ollama">Ollama</option>
+              <option value="openai">OpenAI</option><option value="anthropic">Anthropic</option>
+            </select></label>
+            <label>Model override<input maxLength={150} value={current.model} onChange={event => update("model", event.target.value)}/></label>
+            <Link className="text-link" to="/resume-studio">Choose a template in Resume Studio</Link>
+          </div>
+          <Details values={{ "configured provider": state.provider, "configured model": state.model }}/>
+        </Panel>
+      </div>
+      <Panel title="Job boards" caption="Configure discovery by board slug. Employer submission credentials are managed on the server.">
+        {sources.map((source, index) => <div key={index} className="toolbar source-row">
+          <label>Provider<select value={source.provider} onChange={event => sourceChange(index, {provider:event.target.value})}>
+            {["greenhouse", "lever", "ashby", "mock"].map(name => <option key={name}>{name}</option>)}
+          </select></label>
+          <label>Board slug<input required pattern="[A-Za-z0-9_\-]{1,80}" value={source.board} onChange={event => sourceChange(index, {board:event.target.value})}/></label>
+          <label>Company<input required maxLength={150} value={source.company} onChange={event => sourceChange(index, {company:event.target.value})}/></label>
+          <label className="check"><input type="checkbox" checked={source.enabled} onChange={event => sourceChange(index, {enabled:event.target.checked})}/> Enabled</label>
+          <Button type="button" variant="ghost" size="icon" aria-label={"Remove board " + (index + 1)} onClick={() => update("sources", sources.filter((_, position) => index !== position))}><Trash2 size={15}/></Button>
+        </div>)}
+        {!sources.length && <Empty>No discovery boards configured.</Empty>}
+        <Button type="button" variant="outline" disabled={sources.length >= 20} onClick={() => update("sources", [...sources, {provider:"greenhouse", board:"", company:"", enabled:true}])}><Plus size={16}/> Add board</Button>
+      </Panel>
+      <Panel title="Review and system health">
+        <div className="inline"><Status value="Final approval required" tone="good"/><Status value={"Worker " + state.worker.status}/></div>
+        <Details values={{ "automation mode": label(current.automation_mode), "application mode": label(current.mode),
+          "dry run": current.dry_run ? "Enabled" : "Disabled by server configuration", "authorized board": state.authorized_board,
+          "last heartbeat": date(state.worker.last_heartbeat), "last successful run": date(state.worker.last_success),
+          "model health": state.worker.model }}/>
+      </Panel>
+    </form>
+  </>;
+}

@@ -6,3 +6,7 @@ __pycache__/
 research/upstream/
 *.pyc
 
+
+frontend/node_modules/
+frontend/dist/
+

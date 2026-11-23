@@ -43,7 +43,7 @@ def test_dashboard_manual_studio_and_scheduled_mock_application(tmp_path):
                 page = browser.new_page()
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
-                page.goto(origin)
+                page.goto(origin + "/legacy")
                 expect(page.get_by_role("heading", name="Overview")).to_be_visible()
                 page.get_by_role("link", name="Settings").click()
                 page.get_by_role("button", name="Load synthetic test profile").click()
