@@ -76,9 +76,11 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
   const [modeDraft, setModes] = useState<string[]>();
   const [employmentDraft, setEmployment] = useState<string>();
   const [experienceDraft, setExperience] = useState<string>();
-  const [facts, setFacts] = useState<string[]>([]);
+  const [factSelection, setFactSelection] = useState<{revision: string; ids: string[]}>();
   const [boardKeys, setBoardKeys] = useState<string[]>([]);
-  const [selectionRevision, setSelectionRevision] = useState<string>();
+  const defaultFacts = review?.groups.filter(fact => !fact.verified && !fact.conflict && fact.evidence.length > 0)
+    .map(fact => fact.id) ?? [];
+  const facts = factSelection?.ids ?? defaultFacts;
   const roles = roleDraft ?? (saved("roles").length ? saved("roles") : proposeRoles(review?.groups ?? [])).join(", ");
   const locations = locationDraft ?? (saved("locations").length ? saved("locations") : proposedLocations).join(", ");
   const modes = modeDraft ?? saved("work_modes");
@@ -91,7 +93,7 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
     categories.set(fact.category, group);
   }
   const ranked = rankBoards(boards ?? [], list(roles), list(locations), modes, maximum);
-  const stale = !!selectionRevision && selectionRevision !== review?.revision;
+  const stale = !!factSelection && factSelection.revision !== review?.revision;
   const selectedGroups = review?.groups.filter(fact => facts.includes(fact.id)) ?? [];
   const conflicting = selectedGroups.some(fact => fact.conflict && review?.groups.some(other =>
     other.id !== fact.id && other.conflict === fact.conflict && (other.verified || facts.includes(other.id))));
@@ -106,7 +108,7 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
     !state.options.enabled && "Resume hourly discovery in Automation.",
     !summary?.checks["Real submission disabled"] && "Enable dry-run preparation and disable automatic submission in Automation.",
     state.worker.pending > 0 && "Wait for the current run to finish.",
-    stale && "The profile changed. Reset your fact selections and review the latest evidence.",
+    stale && "The profile changed. Restore default selections and review the latest evidence.",
     conflicting && "Review conflicting entries and select only one value per credential or link.",
   ].filter(Boolean);
   const latest = summary?.latest_run;
@@ -122,23 +124,22 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
         ...(experienceDraft !== undefined ? {maximum_mandatory_years: maximum === "" ? null : Number(maximum)} : {}),
       }, "Activation confirmed. First dry-run preparation queued.");
       if (result) {
-        setFacts([]);
+        setFactSelection(undefined);
         setBoardKeys([]);
-        setSelectionRevision(undefined);
       }
     }}>
-      <Panel title="Career evidence" caption="Select the facts you can verify. Open a source excerpt to compare entries across originals.">
+      <Panel title="Career evidence" caption="Facts with source evidence are selected by default. Uncheck anything inaccurate and review conflicting values before confirming.">
         <ErrorNotice message={reviewError}/>
         {!review && !reviewError && <Loading/>}
         <div className="inline">{review?.originals.map(original => <a className="text-link" key={original.id}
           href={originalUrl(original)}>{original.name}</a>)}</div>
-        <p>{facts.length} selected for verification</p>
+        <p>{facts.length} selected for verification when you confirm activation</p>
         <div className="inline">
           <Link className="text-link" to="/profile">Manage contact details and originals</Link>
-          {facts.length > 0 && <Button type="button" variant="outline" size="sm" onClick={() => {
-            setFacts([]);
-            setSelectionRevision(undefined);
-          }}>Reset fact selections</Button>}
+          {review && facts.length > 0 && !stale && <Button type="button" variant="outline" size="sm" disabled={busy}
+            onClick={() => setFactSelection({revision: review.revision, ids: []})}>Clear fact selections</Button>}
+          {factSelection && <Button type="button" variant="outline" size="sm" disabled={busy}
+            onClick={() => setFactSelection(undefined)}>Restore default selections</Button>}
         </div>
         {review && <div className="stack">{[...categories].map(([category, entries]) =>
           <details key={category} open={entries.some(fact => fact.conflict) || undefined}>
@@ -149,8 +150,7 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
               {fact.conflict && <Status value="Conflicting source values"/>}
               {fact.verified ? <Status value="Verified"/> : <label className="check"><input type="checkbox"
                 aria-label={"Verify " + fact.value} disabled={busy || stale} checked={facts.includes(fact.id)} onChange={event => {
-                  setSelectionRevision(review.revision);
-                  setFacts(toggle(facts, fact.id, event.target.checked));
+                  setFactSelection({revision: review.revision, ids: toggle(facts, fact.id, event.target.checked)});
                 }}/>Verify this fact</label>}
               {fact.evidence.length > 0 && <details><summary>Source evidence · {fact.evidence.length}</summary>
                 {fact.evidence.map(({original, excerpt}, index) => <div key={index}>
