@@ -4,6 +4,8 @@ export interface Fact {
   label: string;
   value: string;
   verified: boolean;
+  unsupported?: boolean;
+  prioritized?: boolean;
   source: string;
   excerpt: string;
 }
@@ -60,6 +62,7 @@ export interface Job {
   apply_url?: string;
   description?: string;
   posted?: string | null;
+  deadline?: string | null;
   available: boolean;
   status: string;
   created: string;
@@ -114,6 +117,7 @@ export interface Run {
 
 export interface State {
   profile: Profile;
+  profile_readiness: { ready: boolean; checks: Record<string, boolean> };
   options: Options;
   provider: string;
   model: string;

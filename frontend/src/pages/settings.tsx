@@ -2,14 +2,17 @@ import { useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import type { Fact, Options, Preferences, Profile, Source } from "../api";
+import type { Fact, Options, Preferences, Profile, Source, Upload } from "../api";
 import { date, label, searchMatch } from "../domain";
-import { Details, Empty, Heading, Panel, Status } from "../shared";
+import { Details, Empty, ErrorNotice, Heading, Panel, Status, useResource } from "../shared";
 import type { PageProps } from "../shared";
 import { UploadForm } from "./studio";
 
 const categories = ["personal", "education", "experience", "skill", "project", "authorization", "certification", "other"];
-const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_keywords", "target_companies", "excluded_companies"];
+const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_roles", "excluded_keywords", "target_companies", "excluded_companies"];
+const suggestedRoles = ["Software Engineer I", "Graduate Software Engineer", "Associate Software Engineer",
+  "Backend Developer", "Full Stack Developer", "Python Developer", "Data Engineer", "AI/ML Engineer",
+  "Entry-level Software Developer", "Software Engineering Intern"];
 const preferenceChoices: Record<string, string[]> = {
   work_modes: ["remote", "hybrid", "onsite"],
   career_tracks: ["entry-level", "graduate", "backend", "full-stack", "data", "ai-ml", "internship"],
@@ -28,6 +31,10 @@ export function ProfilePage(props: PageProps) {
   const [unverified, setUnverified] = useState(false);
   const [editing, setEditing] = useState<string>();
   const [scope, setScope] = useState<string>();
+  const {data: uploads} = useResource<Upload[]>("/api/profile/uploads", props.revision);
+  const [original, setOriginal] = useState("");
+  const {data: sourceDocument, error: sourceError} = useResource<{name: string; text: string}>(
+    original ? "/api/profile/uploads/" + original + "/text" : null);
   const current = draft ?? state.profile;
   const facts = current.facts.filter(fact => searchMatch(query, fact.label, fact.value, fact.category) &&
     (!unverified || !fact.verified) && (!scope || fact.source === scope));
@@ -51,11 +58,23 @@ export function ProfilePage(props: PageProps) {
       <Button type="submit" form="profile-form" disabled={busy || (!draft && !Object.keys(listDraft).length)}><Save size={16}/> Save profile</Button>
     </Heading>
     <div className="split-grid studio-top">
-      <Panel title="Profile coverage"><Details values={{ "verified facts": current.facts.filter(fact => fact.verified).length, "draft facts": current.facts.filter(fact => !fact.verified).length, total: current.facts.length }}/></Panel>
+      <Panel title="Profile coverage">
+        <Status value={state.profile_readiness.ready ? "Ready for autonomous preparation" : "Verified evidence required"}/>
+        <Details values={Object.fromEntries(Object.entries(state.profile_readiness.checks).map(([key, value]) => [key, value ? "Verified" : "Required"]))}/>
+        <Details values={{ "verified facts": current.facts.filter(fact => fact.verified).length, "draft facts": current.facts.filter(fact => !fact.verified).length, total: current.facts.length }}/></Panel>
       <Panel title="Import a resume">{draft || Object.keys(listDraft).length ? <p className="subtle">Save or discard your draft before importing another resume.</p> : <UploadForm {...props}/>}</Panel>
     </div>
+    {!!uploads?.length && <Panel title="Original resume" caption="Select an upload to read its text and review the extracted facts below.">
+      <label>Original document<select value={original} onChange={event => {
+        setOriginal(event.target.value); setScope(event.target.value ? "upload:" + event.target.value : undefined);
+      }}><option value="">Select an upload</option>{uploads.map(upload => <option value={upload.id} key={upload.id}>{upload.name}</option>)}</select></label>
+      {original && <a className="text-link" href={"/api/profile/uploads/" + original}>Download original</a>}
+      <ErrorNotice message={sourceError}/>
+      {sourceDocument && <pre className="resume-source">{sourceDocument.text}</pre>}
+    </Panel>}
     <form id="profile-form" className="content-grid" onSubmit={event => {event.preventDefault(); void saveProfile();}}>
       <Panel title="Job preferences" caption="Use commas to separate roles, locations, and keywords.">
+        <Button type="button" variant="outline" onClick={() => setListDraft({...listDraft, roles: suggestedRoles.join(", ")})}>Use software engineering role suggestions</Button>
         <div className="form-grid">{preferenceLists.map(key => {
           const choices = preferenceChoices[key];
           const values = current.preferences[key];
@@ -67,8 +86,8 @@ export function ProfilePage(props: PageProps) {
             : <label key={key}>{label(key)}<input value={listDraft[key] ?? listInput(current.preferences, key)}
               onChange={event => setListDraft({...listDraft, [key]: event.target.value})}/></label>;
         })}
-        {(["min_salary", "recent_days", "maximum_mandatory_years"] as const).map(key => <label key={key}>{label(key)}
-          <input type="number" min={key === "recent_days" ? 1 : 0} max={key === "recent_days" ? 365 : key === "maximum_mandatory_years" ? 30 : undefined}
+        {(["min_salary", "recent_days", "minimum_mandatory_years", "maximum_mandatory_years"] as const).map(key => <label key={key}>{label(key)}
+          <input type="number" min={key === "recent_days" ? 1 : 0} max={key === "recent_days" ? 365 : key.endsWith("mandatory_years") ? 30 : undefined}
             value={String(current.preferences[key] ?? "")} onChange={event => updatePreference(key, event.target.value === "" ? null : Number(event.target.value))}/></label>)}
         <label>Salary currency<input maxLength={3} value={String(current.preferences.salary_currency ?? "")} onChange={event => updatePreference("salary_currency", event.target.value)}/></label>
         <label>Relocation<input maxLength={160} value={String(current.preferences.relocation ?? "")} onChange={event => updatePreference("relocation", event.target.value)}/></label>
@@ -95,7 +114,12 @@ export function ProfilePage(props: PageProps) {
           <p className="subtle">{label(fact.category)} · {fact.source}</p>
           {fact.excerpt && <details><summary>Source excerpt</summary><p className="preserve">{fact.excerpt}</p></details>}
           <div className="inline">
-            <label className="check"><input type="checkbox" checked={fact.verified} disabled={!fact.label.trim() || !fact.value.trim()} onChange={event => updateFact(fact.id, {verified:event.target.checked})}/> Verified</label>
+            <label className="check"><input type="checkbox" checked={fact.verified} disabled={fact.unsupported || !fact.label.trim() || !fact.value.trim()} onChange={event => updateFact(fact.id, {verified:event.target.checked})}/> Verified</label>
+            <label className="check"><input type="checkbox" checked={!!fact.unsupported} onChange={event => updateFact(fact.id, {
+              unsupported: event.target.checked, ...(event.target.checked ? {verified: false, prioritized: false} : {}),
+            })}/> Unsupported</label>
+            {fact.category === "project" && <label className="check"><input type="checkbox" checked={!!fact.prioritized && fact.verified}
+              disabled={!fact.verified} onChange={event => updateFact(fact.id, {prioritized: event.target.checked})}/> Prioritize project</label>}
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(editing === fact.id ? undefined : fact.id)}>{editing === fact.id ? "Done" : "Edit"}</Button>
             <Button type="button" size="icon" variant="ghost" aria-label={"Remove " + (fact.label || "new fact")} onClick={() => setDraft({...current, facts: current.facts.filter(item => item.id !== fact.id)})}><Trash2 size={15}/></Button>
           </div>

@@ -189,6 +189,8 @@ def prepare(job_id, resume_id, profile, mode, eligibility, review_accepted=False
         record(db, fresh, state, "Review required fields." if summary["missing"] else "Application ready for approval.")
         if state == "APPLICATION_PREPARED" and (previous.get("provider") is None or previous.get("pending")):
             db.add(Notification(kind="ready", message="An application is ready for final review."))
+        if state == "NEEDS_REVIEW" and summary["missing"] != previous.get("pending"):
+            db.add(Notification(kind="action", message="A prepared application needs information."))
         return fresh
 
 

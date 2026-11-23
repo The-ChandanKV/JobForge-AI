@@ -3,6 +3,7 @@ import signal
 import threading
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
+from time import process_time
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -12,9 +13,11 @@ from .applications import prepare, reconcile, still_verified
 from .llm import model_status
 from .matching import analyze, evaluate_saved_job, shortlist
 from .models import Application, Job, JobSource, Log, Profile, Resume, Run, Session, Settings, SubmissionTask, WorkerLock, now, uid
-from .notifications import deliver_review_notifications, record_daily_summary, send_run_summary
+from .notifications import deliver_review_notifications, record_daily_summary, record_repeat_failures, send_run_summary
 from .submission import process_one
+from .profile import readiness
 from .providers import fetch_board, save_job
+from .reliability import anchor_worker, worker_memory_mib
 from .resumes import generate
 from .schemas import Generation, Options, Posting, Preferences
 
@@ -137,6 +140,8 @@ def refresh_model_status(owner):
     result = {**model_status(opts), "checked": now()}
     with Session.begin() as db:
         db.execute(update(WorkerLock).where(WorkerLock.owner == owner).values(model_status=result))
+        if result["provider"] == "ollama" and result["status"] != "AVAILABLE" and previous.get("status") != result["status"]:
+            db.add(Log(kind="model_health", message="Local model became unavailable", detail={"status": result["status"]}))
 
 
 def retry_due(job, options):
@@ -171,7 +176,9 @@ def pipeline(run_id, lost):
         profile = db.get(Profile, 1)
         options = Options.model_validate(db.get(Settings, 1).options)
         preferences = Preferences.model_validate(profile.preferences)
-    result = {"scanned": 0, "filtered": 0, "discovered": 0, "compiled": 0, "prepared": 0, "errors": []}
+    profile_ready = readiness(profile.facts)["ready"]
+    result = {"scanned": 0, "filtered": 0, "discovered": 0, "eligible": 0, "compiled": 0,
+              "prepared": 0, "blocked_by_profile": 0, "exceptions": 0, "errors": []}
     active_sources = [source for source in options.sources if source.enabled]
     for source in active_sources:
         if canceled(run_id, lost):
@@ -196,6 +203,7 @@ def pipeline(run_id, lost):
                     result["discovered"] += 1
                     previous = saved.match.get("recommendation")
                     evaluate_saved_job(saved, profile.facts, preferences, options.min_match_score)
+                    result["eligible"] += int(saved.match["eligibility"] == "ELIGIBLE")
                     if (saved.match["recommendation"] == "PREPARE_APPLICATION" and previous != "PREPARE_APPLICATION"
                             and shortlist(Posting.model_validate(saved.detail), preferences)):
                         db.add(Log(kind="match", message="Job meets the relevance threshold",
@@ -242,6 +250,9 @@ def pipeline(run_id, lost):
             Posting.model_validate(candidate.detail), preferences
         ):
             continue
+        if not profile_ready and candidate.detail["source"] != "mock":
+            result["blocked_by_profile"] += 1
+            continue
         count = None
         stage = "Resume generation"
         try:
@@ -275,7 +286,9 @@ def pipeline(run_id, lost):
                            .values(status="RESUME_READY"))
             if (previous_application or options.max_applications_per_day > prepared_today) and not canceled(run_id, lost):
                 stage = "Form preparation"
-                prepare(candidate.id, resume.id, profile, options.mode, candidate.match["eligibility"])
+                app = prepare(candidate.id, resume.id, profile, options.mode, candidate.match["eligibility"])
+                if app.summary.get("missing") or app.summary.get("exception"):
+                    result["exceptions"] += 1
                 prepared_today += int(not previous_application)
                 result["prepared"] += 1
             with Session.begin() as db:
@@ -300,6 +313,7 @@ def step():
         process_one(Session)
         deliver_review_notifications(Session)
         record_daily_summary(Session)
+        record_repeat_failures(Session)
         with Session.begin() as db:
             for unfinished in db.scalars(select(Run).where(Run.status == "RUNNING")):
                 if unfinished.attempts < 2 and not unfinished.canceled:
@@ -319,7 +333,10 @@ def step():
         thread = threading.Thread(target=heartbeat, args=(owner, done, lost), daemon=True)
         thread.start()
         try:
+            cpu_started = process_time()
             result = pipeline(job_run.id, lost)
+            result["worker_cpu_seconds"] = round(process_time() - cpu_started, 4)
+            result["worker_peak_rss_mib"] = worker_memory_mib()
             if lost.is_set():
                 return
             with Session.begin() as db:
@@ -349,6 +366,8 @@ def step():
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     initialize()
+    with Session.begin() as db:
+        anchor_worker(db, lock_settings(db))
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: STOP.set())
     failed_ticks = 0

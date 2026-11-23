@@ -292,3 +292,22 @@ def test_greenhouse_uses_only_final_approval_and_verifies_mocked_response(db_ses
         assert terminal["task"]["status"] == "SUBMITTED", terminal
         assert "fixture-123" in terminal["application"]["confirmation"]
     assert len(post_calls) == 1
+
+
+def test_rejection_reason_and_explicit_company_feedback_preserve_facts(db_sessions, fake_browser):
+    app = prepared(db_sessions)
+    with db_sessions() as db:
+        original = db.get(Profile, 1).facts
+        company = db.get(Application, app.id)
+        assert company is not None
+    with TestClient(api.app) as client:
+        rejected = client.post(f"/api/applications/{app.id}/decision", json={
+            "action": "reject", "reason": "too_senior", "block_company": True, "exclude_senior": True,
+        })
+        assert rejected.status_code == 200
+        assert rejected.json()["summary"]["rejection_reason"] == "too_senior"
+    with db_sessions() as db:
+        profile = db.get(Profile, 1)
+        assert profile.facts == original
+        assert profile.preferences["exclude_senior_roles"]
+        assert len(profile.preferences["excluded_companies"]) == 1

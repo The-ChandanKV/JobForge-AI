@@ -166,3 +166,5 @@ dialog::backdrop { background: color-mix(in oklab, black 58%, transparent); back
   .responsive-table td:first-child { grid-column: 1 / -1; }
   .responsive-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--muted-foreground); font-size: 11px; }
 }
+
+.resume-source { max-height: 55vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; margin-block: 10px; background: var(--canvas); }

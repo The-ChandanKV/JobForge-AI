@@ -11,10 +11,25 @@ SECTIONS = {
     "education": "education", "experience": "experience", "work experience": "experience",
     "professional experience": "experience", "employment": "experience", "skills": "skill",
     "technical skills": "skill", "projects": "project", "certifications": "certification",
+    "internships": "experience", "achievements": "other", "awards": "other",
 }
 
 
+def readiness(facts):
+    verified = [fact for fact in facts if fact["verified"] and not fact.get("unsupported")]
+    contacts = {fact["label"].casefold(): fact["value"].strip() for fact in verified if fact["category"] == "personal"}
+    checks = {"Name": bool(contacts.get("name")),
+              "Email": bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", contacts.get("email", ""))),
+              "Career evidence": any(fact["category"] in {"education", "experience", "project", "skill", "certification"}
+                                     and fact["value"].strip() for fact in verified)}
+    return {"ready": all(checks.values()), "checks": checks}
+
+
 def parse_file(name, data):
+    return candidates(extract_text(name, data))
+
+
+def extract_text(name, data):
     suffix = Path(name).suffix.lower()
     if not data or len(data) > MAX_UPLOAD:
         raise ValueError("Provide a non-empty file under 4 MB.")
@@ -46,19 +61,41 @@ def parse_file(name, data):
         raise ValueError("Supported files are PDF, UTF-8 TXT, and TEX.")
     if not text.strip():
         raise ValueError("No selectable text found. Provide a text or LaTeX copy.")
-    return candidates(text)
+    return text[:100_000]
 
 
 def candidates(text, source="text"):
     facts = []
     section = "other"
+    seen = set()
+    heading = ""
     for line in text.splitlines()[:300]:
+        if len(facts) >= 146:
+            break
         value = line.strip(" \t•–")
         if not value:
             continue
-        if value.rstrip(":").lower() in SECTIONS:
-            section = SECTIONS[value.rstrip(":").lower()]
-            continue
+        prefix, separator, content = value.partition(":")
+        if prefix.lower() in SECTIONS and (separator or not content):
+            heading = prefix.lower()
+            section = SECTIONS[heading]
+            if not content.strip():
+                continue
+            value = content.strip()
+        if heading == "education":
+            cgpa = re.search(r"(?i)\b(?:CGPA|GPA)\s*[:=]?\s*(\d{1,2}(?:\.\d+)?(?:\s*/\s*\d{1,2}(?:\.\d+)?)?)", value)
+            graduation = re.search(r"(?i)\b(?:graduation(?: year)?|graduat(?:ed|ing)(?: in)?|expected)\s*[:=]?\s*(20\d{2})\b", value)
+            for title, match in (("CGPA", cgpa), ("Graduation year", graduation)):
+                if match and (title, match[1]) not in seen:
+                    seen.add((title, match[1]))
+                    facts.append(Fact(category="education", label=title, value=match[1], source=source, excerpt=value[:1500]))
+        if section == "other":
+            for url in re.findall(r"https?://[^\s<>]+", value):
+                url = url.rstrip(",.;)")
+                title = "GitHub" if re.match(r"https?://(?:www\.)?github\.com/", url, re.I) else "Portfolio"
+                if (title, url) not in seen:
+                    seen.add((title, url))
+                    facts.append(Fact(category="personal", label=title, value=url[:1500], source=source, excerpt=value[:1500]))
         if section == "other" and not facts and len(value.split()) <= 6 and value.replace(" ", "").isalpha():
             facts.append(Fact(category="personal", label="Name", value=value[:1500], source=source, excerpt=value[:1500]))
             continue
@@ -72,6 +109,6 @@ def candidates(text, source="text"):
         parts = re.split(r"[,;]", value) if section == "skill" else [value]
         for part in parts:
             if part.strip() and len(facts) < 150:
-                facts.append(Fact(category=section, label=section.title(), value=part.strip()[:1500],
+                facts.append(Fact(category=section, label={"internships": "Internship", "awards": "Achievement", "achievements": "Achievement"}.get(heading, section.title()), value=part.strip()[:1500],
                                   source=source, excerpt=value[:1500]))
-    return facts
+    return facts[:150]

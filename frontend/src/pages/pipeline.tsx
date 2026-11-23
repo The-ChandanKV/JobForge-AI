@@ -15,14 +15,19 @@ const editable = ["APPLICATION_PREPARED", "READY_FOR_REVIEW", "NEEDS_REVIEW", "N
 const manual = ["APPLICATION_PREPARED", "READY_FOR_REVIEW", "NEEDS_MANUAL_ACTION", "APPROVED", "SUBMISSION_UNCERTAIN"];
 const rejectable = ["APPLICATION_PREPARED", "READY_FOR_REVIEW", "NEEDS_REVIEW", "NEEDS_MANUAL_ACTION"];
 const queueFilters = {
-  ready: "Ready for review", missing: "Missing information", manual: "Unsupported portal",
+  ready: "Ready for review", dispatch: "Ready to submit", uncertain: "Submission uncertain", missing: "Missing information", manual: "Manual handoff",
   rejected: "Previously rejected", failed: "Submission failed", submitted: "Submitted", all: "All applications",
 };
-const queueSorts = { score: "Match score", discovered: "Discovery date", company: "Company", posted: "Job posting date" };
+const queueSorts = { recommended: "Recommended first", score: "Highest match", expiring: "Expiring soon", discovered: "Discovery date", company: "Company", posted: "Recently posted" };
 
-function matchesQueue(app: Application, filter: keyof typeof queueFilters) {
+const reasons = {not_interested: "Not interested", wrong_location: "Wrong location", too_senior: "Too senior",
+  salary_mismatch: "Salary mismatch", already_applied: "Already applied", incorrect_match: "Incorrect match", other: "Other"};
+
+function matchesQueue(app: Application, filter: keyof typeof queueFilters, canDispatch: boolean) {
   switch (filter) {
     case "ready": return app.review_status === "READY_FOR_REVIEW" && !app.summary.missing?.length;
+    case "dispatch": return canDispatch;
+    case "uncertain": return app.review_status === "SUBMISSION_UNCERTAIN";
     case "missing": return Boolean(app.summary.missing?.length);
     case "manual": return app.submission_method === "manual" || Boolean(app.summary.exception);
     case "rejected": return ["REJECTED", "REJECTED_BY_USER"].includes(app.review_status);
@@ -34,8 +39,16 @@ function matchesQueue(app: Application, filter: keyof typeof queueFilters) {
 
 function compareJobs(a: Job, b: Job, sort: keyof typeof queueSorts) {
   switch (sort) {
+    case "recommended":
     case "score": return (b.match.match_score ?? -1) - (a.match.match_score ?? -1);
     case "company": return a.company.localeCompare(b.company) || a.role.localeCompare(b.role);
+    case "expiring": {
+      const expiry = (job: Job) => {
+        const at = Date.parse(job.deadline ?? "");
+        return job.available && Number.isFinite(at) && at > Date.now() ? at : Number.MAX_SAFE_INTEGER;
+      };
+      return expiry(a) - expiry(b);
+    }
     case "posted": {
       const left = Date.parse(a.posted ?? "");
       const right = Date.parse(b.posted ?? "");
@@ -50,6 +63,11 @@ const tracking = ["APPROVED", "SUBMITTED", "INTERVIEW", "OFFER"];
 function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: Pick<PageProps, "mutate" | "revision" | "busy"> & { id: string; close: () => void; selected?: Review; toggle?: (review: Review) => void }) {
   const { data: review, error } = useResource<Review>(appPath(id) + "/review", revision);
   const { data: events, error: eventError } = useResource<Event[]>(appPath(id) + "/events", revision);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [block, setBlock] = useState(false);
+  const [excludeSenior, setExcludeSenior] = useState(false);
+  const [copied, setCopied] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string>();
   const [reference, setReference] = useState("");
@@ -58,6 +76,14 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
   const provider = review?.payload.provider;
   const originalLink = officialUrl(review?.job.url);
   const applyLink = officialUrl(review?.job.apply_url) ?? originalLink;
+  async function copyAnswer(value: string, field: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(field + " copied.");
+    } catch {
+      setCopied("Clipboard unavailable. Select and copy the value manually.");
+    }
+  }
   async function decide(action: string, message: string, note = "") {
     return mutate(appPath(id) + "/decision", "POST", {action, note}, message);
   }
@@ -90,6 +116,12 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
             <Button disabled={busy} onClick={() => void mutate(appPath(id) + "/approve-submit", "POST",
               {application_id: id, payload_hash: review.payload_hash}, "Final approval recorded. Submission is queued for verification.")}><ShieldCheck size={16}/> Approve &amp; submit</Button>
           </>}
+          {provider === "manual" && <>
+            <p>Download the saved PDF, open the employer form, and enter the applicable fields. Verify any required answers on the employer form before submitting.</p>
+            <div className="stack">{Object.entries({...review.payload.fields, ...review.payload.saved_answers}).filter(([, value]) => typeof value === "string" && value).map(([field, value]) =>
+              <div className="inline" key={field}><Button size="sm" variant="outline" onClick={() => void copyAnswer(String(value), field)}>Copy {field}</Button></div>)}</div>
+            {copied && <p role="status">{copied}</p>}
+          </>}
           {provider === "manual" && applyLink && <Button asChild variant="outline">
             <a href={applyLink} target="_blank" rel="noreferrer">Review &amp; open application <ArrowUpRight size={15}/></a>
           </Button>}
@@ -99,12 +131,11 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
           <div className="inline">
             {editable.includes(app.status) && <>
               <Button variant="outline" disabled={busy} onClick={() => void mutate(appPath(id) + "/review", "PUT", {}, "Application preparation refreshed.")}>Refresh preparation</Button>
-              <Button variant="outline" disabled={busy} onClick={() => {
-                if (window.confirm("Reject this prepared application?")) void decide("reject", "Application rejected.");
-              }}>Reject application</Button>
+              <Button variant="outline" disabled={busy} onClick={() => setRejecting(true)}>Reject application</Button>
             </>}
             {app.status === "SUBMISSION_UNCERTAIN" && <Button variant="outline" disabled={busy} onClick={() => void decide("reconcile", "Reconciliation checked. Review the current receipt status.")}>Check receipt</Button>}
             <Link className="text-link" to={"/resume-studio?job=" + review.job.id}>Edit resume <ArrowUpRight size={14}/></Link>
+            <Link className="text-link" to={"/jobs?similar=" + review.job.id}>Find similar roles <ArrowUpRight size={14}/></Link>
           </div>
           {review.payload.provider === "mock" && editable.includes(app.status) && <form className="stack" onSubmit={event => {
             event.preventDefault();
@@ -158,6 +189,21 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
         {originalLink && <a className="text-link" href={originalLink} target="_blank" rel="noreferrer">Open original job <ArrowUpRight size={14}/></a>}
       </>}
     </Modal>
+    {rejecting && <Modal title="Reject application" close={() => setRejecting(false)}>
+      <form className="stack" onSubmit={async event => {
+        event.preventDefault();
+        const result = await mutate(appPath(id) + "/decision", "POST",
+          {action: "reject", reason: reason || null, block_company: block, exclude_senior: reason === "too_senior" && excludeSenior}, "Application rejected.");
+        if (result) {setRejecting(false); close();}
+      }}>
+        <label>Rejection reason<select value={reason} onChange={event => setReason(event.target.value)}>
+          <option value="">Choose a reason</option>{Object.entries(reasons).map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+        </select></label>
+        <label className="check"><input type="checkbox" checked={block} onChange={event => setBlock(event.target.checked)}/> Never recommend this company</label>
+        {reason === "too_senior" && <label className="check"><input type="checkbox" checked={excludeSenior} onChange={event => setExcludeSenior(event.target.checked)}/> Exclude senior roles in my preferences</label>}
+        <Button type="submit" disabled={busy}>Confirm rejection</Button>
+      </form>
+    </Modal>}
   </>;
 }
 
@@ -174,7 +220,7 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
   const [reviews, setReviews] = useState<Review[]>([]);
   const [batch, setBatch] = useState<"approve" | "reject">();
   const [queueFilter, setQueueFilter] = useState<keyof typeof queueFilters>("ready");
-  const [queueSort, setQueueSort] = useState<keyof typeof queueSorts>("score");
+  const [queueSort, setQueueSort] = useState<keyof typeof queueSorts>("recommended");
   const [layout, setLayout] = useState("board");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -183,6 +229,8 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
   const [page, setPage] = useState(1);
   const [title, description] = copy[mode];
   const approvalQueue = mode === "approvals";
+  const canDispatch = (app?: Application) => Boolean(app && app.review_status === "READY_FOR_REVIEW" && !app.summary.missing?.length
+    && (app.submission_method === "mock" || (app.submission_method === "greenhouse" && state.authorized_board && !state.options.dry_run)));
   function toggleReview(review: Review) {
     setReviews(previous => {
       const selected = previous.find(item => item.application.id === review.application.id);
@@ -193,14 +241,14 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
   const jobs = new Map(state.jobs.map(job => [job.id, job]));
   const applications = new Map(state.applications.map(app => [app.job_id, app]));
   const rows = state.jobs.map(job => ({job, app: applications.get(job.id)})).filter(({job, app}) => {
-    if (approvalQueue && (!app || !matchesQueue(app, queueFilter))) return false;
+    if (approvalQueue && (!app || !matchesQueue(app, queueFilter, canDispatch(app)))) return false;
     if (mode === "history" && !app) return false;
     if (mode === "exceptions" && !isJobException(job) && (!app || !isApplicationException(app))) return false;
     if (params.get("evidence") === "verified" && (!app || evidence(app) !== "Provider verification")) return false;
     const day = (app?.created ?? job.created).slice(0, 10);
     return (!status || stage(job, app) === status) && (!start || day >= start) && (!end || day <= end) &&
       searchMatch(query, job.role, job.company, app?.confirmation ?? undefined);
-  }).sort((a, b) => approvalQueue ? compareJobs(a.job, b.job, queueSort) : (b.app?.created ?? b.job.created).localeCompare(a.app?.created ?? a.job.created));
+  }).sort((a, b) => approvalQueue ? ((queueSort === "recommended" ? Number(canDispatch(b.app)) - Number(canDispatch(a.app)) : 0) || compareJobs(a.job, b.job, queueSort)) : (b.app?.created ?? b.job.created).localeCompare(a.app?.created ?? a.job.created));
   const pages = Math.max(1, Math.ceil(rows.length / 25));
   const currentPage = Math.min(page, pages);
   function select(key: "app" | "job", id?: string) {
@@ -252,7 +300,7 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
             <td><button className="flat-button" onClick={() => app ? select("app", app.id) : select("job", job.id)}><Company job={job}/></button></td>
             <td data-label="Current status"><Status value={app?.review_status ?? job.automation.state ?? job.status}/></td>
             {approvalQueue && <td data-label="Match">{job.match.match_score == null ? "—" : job.match.match_score + "%"}</td>}
-            <td data-label="Created">{date(app?.created ?? job.created)}</td>
+            <td data-label="Created">{date(app?.created ?? job.created)}{queueSort === "expiring" && job.available && Date.parse(job.deadline ?? "") > Date.now() && <small className="row-note">Deadline {date(job.deadline)}</small>}</td>
             <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.exception || app?.summary.reason || label(app?.review_status ?? job.automation.state)
               : app ? evidence(app) : "—"}</td>
             {mode === "exceptions" && <td data-label="Retry">{isJobException(job) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>}</td>}

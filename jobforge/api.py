@@ -1,6 +1,8 @@
+import asyncio
 import hmac
+import logging
 import json
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import PurePath
 from typing import Literal
@@ -23,9 +25,11 @@ from .config import ACCESS_TOKEN, MAX_UPLOAD, ROOT
 from .llm import configured
 from .matching import analyze, evaluate_saved_job, expired
 from .models import Application, ApplicationEvent, FinalApproval, Job, JobDescription, Log, Notification, Profile, Receipt, Resume, Run, Session, Settings, SubmissionTask, Upload, now, uid
-from .profile import parse_file
+from .notifications import deliver_review_notifications, record_worker_health
+from .profile import extract_text, parse_file, readiness
 from .permissions import create_policy
 from .providers import clean_html, intake, save_job
+from .reliability import cadence, report as reliability_report
 from .resumes import cover_letter, generate, recompile
 from .schemas import Edit, Generation, Intake, Options, PolicyRequest, Posting, Preferences, ProfileInput
 from .worker import day_start, future, initialize, lock_settings, queue, worker_status
@@ -34,7 +38,26 @@ from .worker import day_start, future, initialize, lock_settings, queue, worker_
 @asynccontextmanager
 async def lifespan(_):
     initialize()
-    yield
+
+    def check_heartbeat():
+        if record_worker_health(Session):
+            deliver_review_notifications(Session)
+
+    async def watch():
+        while True:
+            await asyncio.sleep(30)
+            try:
+                await asyncio.to_thread(check_heartbeat)
+            except Exception:
+                logging.getLogger(__name__).exception("Worker health observer failed")
+
+    observer = asyncio.create_task(watch())
+    try:
+        yield
+    finally:
+        observer.cancel()
+        with suppress(asyncio.CancelledError):
+            await observer
 
 
 app = FastAPI(title="JobForge AI", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -167,6 +190,11 @@ def application_item(row):
 AUTH = [Depends(authorized)]
 
 
+@app.get("/api/reliability", dependencies=AUTH)
+def reliability():
+    return reliability_report()
+
+
 @app.get("/api/state", dependencies=AUTH)
 def state():
     with Session() as db:
@@ -188,6 +216,7 @@ def state():
                       ))})
         return {
             "profile": row_item(profile, "facts preferences"),
+            "profile_readiness": readiness(profile.facts),
             "options": options.model_dump(mode="json"),
             "provider": provider, "model": model,
             "authorized_board": greenhouse.verified_board(),
@@ -265,6 +294,14 @@ def list_uploads():
         return [dict(row) for row in rows]
 
 
+@app.get("/api/profile/uploads/{upload_id}/text", dependencies=AUTH)
+def upload_text(upload_id: str):
+    with Session() as db:
+        upload = required(db, Upload, upload_id)
+        name, blob = upload.name, upload.blob
+    return {"name": name, "text": extract_text(name, blob)}
+
+
 @app.get("/api/profile/uploads/{upload_id}", dependencies=AUTH)
 def download_upload(upload_id: str):
     with Session() as db:
@@ -290,6 +327,7 @@ def settings_update(options: Options):
         row.options = options.model_dump(mode="json")
         if previous.interval_minutes != options.interval_minutes or previous.enabled != options.enabled:
             row.next_run = future(options.interval_minutes)
+            cadence(db, row)
         if previous.min_match_score != options.min_match_score:
             profile = db.get(Profile, 1)
             preferences = Preferences.model_validate(profile.preferences)
@@ -526,6 +564,10 @@ class Decision(BaseModel):
     action: Literal["approve", "reject", "changes", "simulate", "submit_authorized", "reconcile", "interview", "offer",
                     "employer_rejection", "closed", "record_confirmation"]
     note: str = Field(default="", max_length=240)
+    reason: Literal["not_interested", "wrong_location", "too_senior", "salary_mismatch",
+                    "already_applied", "incorrect_match", "other"] | None = None
+    block_company: bool = False
+    exclude_senior: bool = False
 
 
 @app.post("/api/applications/{app_id}/decision", dependencies=AUTH)
@@ -593,6 +635,19 @@ def decision(app_id: str, payload: Decision):
             original_status = application.status
             status = "REJECTED_BY_USER" if action == "reject" else "NEEDS_REVIEW"
             message = "User declined this application." if action == "reject" else "User requested changes."
+            if action == "reject" and (payload.reason or payload.block_company or payload.exclude_senior):
+                job = required(db, Job, application.job_id)
+                application.summary = {**application.summary, "rejection_reason": payload.reason}
+                if payload.reason:
+                    message += " Reason: " + payload.reason.replace("_", " ") + "."
+                if payload.block_company or payload.exclude_senior:
+                    profile = db.get(Profile, 1)
+                    preferences = Preferences.model_validate(profile.preferences)
+                    if payload.block_company and job.company.casefold() not in {company.casefold() for company in preferences.excluded_companies}:
+                        preferences.excluded_companies.append(job.company)
+                    if payload.exclude_senior:
+                        preferences.exclude_senior_roles = True
+                    profile.preferences = preferences.model_dump()
         else:
             if application.status not in {"APPROVED", "SUBMITTED", "INTERVIEW", "OFFER"}:
                 raise ValueError("Tracking updates require an approved or submitted application.")

@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AwareDatetime, BaseModel, Field, HttpUrl, field_validator
+from pydantic import AwareDatetime, BaseModel, Field, HttpUrl, field_validator, model_validator
 
 from .models import uid
 
@@ -16,8 +16,19 @@ class Fact(BaseModel):
     label: str = Field(min_length=1, max_length=100)
     value: str = Field(min_length=1, max_length=1500)
     verified: bool = False
+    unsupported: bool = False
+    prioritized: bool = False
     source: str = Field(default="manual", max_length=120)
     excerpt: str = Field(default="", max_length=1500)
+
+
+    @model_validator(mode="after")
+    def validate_evidence_state(self):
+        if self.unsupported:
+            self.verified = False
+        if self.category != "project" or not self.verified:
+            self.prioritized = False
+        return self
 
 
 class Preferences(BaseModel):
@@ -27,6 +38,7 @@ class Preferences(BaseModel):
     employment: list[str] = []
     levels: list[str] = []
     excluded_keywords: list[str] = []
+    excluded_roles: list[str] = Field(default_factory=list, max_length=40)
     target_companies: list[str] = []
     excluded_companies: list[str] = []
     min_salary: int | None = Field(default=None, ge=0)
@@ -35,6 +47,7 @@ class Preferences(BaseModel):
     relocation: str = Field(default="", max_length=160)
     career_tracks: list[Literal["entry-level", "graduate", "backend", "full-stack", "data", "ai-ml", "internship"]] = []
     exclude_senior_roles: bool = False
+    minimum_mandatory_years: int | None = Field(default=None, ge=0, le=30)
     maximum_mandatory_years: int | None = Field(default=None, ge=0, le=30)
 
 

@@ -56,7 +56,13 @@ export function Jobs(props: PageProps) {
   const [add, setAdd] = useState(false);
   const qualified = params.get("qualified") === "true";
   const chosen = params.get("job");
-  const rows = state.jobs.filter(job => searchMatch(search, job.role, job.company, job.location, job.source) &&
+  const similar = state.jobs.find(job => job.id === params.get("similar"));
+  const similarSkill = new Set(similar?.match.required_skills ?? []);
+  const roleWords = (job: Job) => job.role.toLowerCase().split(/[^a-z]+/).filter(word => word.length > 3);
+  const shared = (job: Job) => similarSkill.size > 0 && job.match.required_skills?.some(skill => similarSkill.has(skill));
+  const rows = state.jobs.filter(job => (!similar || (job.id !== similar.id && job.available &&
+    (shared(job) || roleWords(job).some(word => !["engineer", "software", "developer"].includes(word) && roleWords(similar).includes(word))))) &&
+    searchMatch(search, job.role, job.company, job.location, job.source) &&
     (!filters.role || job.role === filters.role) && (!filters.company || job.company === filters.company) &&
     (!filters.location || job.location === filters.location) && (!filters.status || job.status === filters.status) &&
     (filters.score === "0" || (job.match.match_score ?? -1) >= Number(filters.score)) &&
@@ -77,6 +83,12 @@ export function Jobs(props: PageProps) {
 
   return <>
     <Heading title="Job discovery" description="Explore saved postings and see how each role matches your verified profile."><Button onClick={() => setAdd(true)}><Plus size={16}/> Add posting</Button></Heading>
+    {similar && <Panel title={"Similar roles to " + similar.role} caption="Available postings that share role terms or detected required skills.">
+      <div className="inline">
+        <Button variant="outline" disabled={busy || state.worker.pending > 0} onClick={() => void mutate("/api/runs", "POST", undefined, "Discovery queued for configured job boards.")}>Refresh discovery</Button>
+        <Button variant="ghost" onClick={() => param("similar")}>Show all jobs</Button>
+      </div>
+    </Panel>}
     <Panel title="">
       <div className="toolbar">
         <label className="search-field"><Search size={16}/><input aria-label="Search jobs" value={search} placeholder="Search jobs" onChange={event => {setSearch(event.target.value); setPage(1);}}/></label>

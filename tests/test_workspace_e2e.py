@@ -39,6 +39,7 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 page.on("console", lambda item: errors.append(item.text) if item.type == "error" else None)
 
                 assert page.request.get(origin + "/api/state").status == 401
+                assert page.request.get(origin + "/api/reliability").status == 401
                 login = page.goto(origin + "/history")
                 assert "script-src 'self'" in login.headers["content-security-policy"]
                 page.locator('input[name="token"]').fill(token)
@@ -102,6 +103,8 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 expect(page.get_by_role("link", name="Open application review")).to_be_visible(timeout=20000)
                 page.get_by_role("link", name="Open application review").click()
                 expect(page.get_by_role("heading", name="Prepared application")).to_be_visible()
+                expect(page.get_by_role("button", name="Copy email")).to_be_visible()
+                expect(page.get_by_role("link", name="Find similar roles")).to_be_visible()
                 expect(page.get_by_role("button", name="Approve & submit")).to_have_count(0)
 
                 page.goto(origin + "/exceptions")

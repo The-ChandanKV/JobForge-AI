@@ -56,6 +56,8 @@ function VersionWorkspace({ jobId, facts, mutate, revision, busy }: Pick<PagePro
   const [prepared, setPrepared] = useState<Application>();
   const current = versions?.find(version => version.id === selected) ?? versions?.[0];
   const upload = originals?.find(item => item.id === original) ?? originals?.[0];
+  const {data: originalText, error: originalTextError} = useResource<{text: string}>(
+    showOriginal && upload ? "/api/profile/uploads/" + upload.id + "/text" : null);
   const excerpts = upload ? [...new Set(facts.filter(fact => fact.source === "upload:" + upload.id).map(fact => fact.excerpt).filter(Boolean))] : [];
   const claims = new Map((current?.report.claims ?? []).flatMap(value => {
     if (!value || typeof value !== "object" || !("id" in value) || !("value" in value)) return [];
@@ -101,13 +103,14 @@ function VersionWorkspace({ jobId, facts, mutate, revision, busy }: Pick<PagePro
         </div>
         <div className={showOriginal ? "split-grid" : ""}>
           {showOriginal && <div className="comparison">
-            <ErrorNotice message={originalError}/>
+            <ErrorNotice message={originalError ?? originalTextError}/>
             {upload && <><label>Imported original<select value={upload.id} onChange={event => setOriginal(event.target.value)}>{originals?.map(item =>
               <option key={item.id} value={item.id}>{item.name} · {date(item.created)}</option>)}</select></label>
               <a className="text-link" href={"/api/profile/uploads/" + upload.id}>Download original</a></>}
             {originals?.length === 0 && <Empty>Upload an original resume to compare versions.</Empty>}
-            {upload && <p className="subtle">Saved excerpts from the original appear beside the tailored PDF. Download the original to see the full document.</p>}
-            {!!excerpts.length && <ul className="bullets original-excerpts">{excerpts.map(excerpt => <li key={excerpt}>{excerpt}</li>)}</ul>}
+            {upload && <p className="subtle">Original extracted text appears beside the tailored PDF.</p>}
+            {originalText && <pre className="resume-source">{originalText.text}</pre>}
+            {!originalText && !!excerpts.length && <ul className="bullets original-excerpts">{excerpts.map(excerpt => <li key={excerpt}>{excerpt}</li>)}</ul>}
           </div>}
           <iframe title="Tailored resume PDF" className="pdf" key={current.id} src={resumeUrl(current.id)}/>
         </div>

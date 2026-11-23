@@ -10,3 +10,17 @@ research/upstream/
 frontend/node_modules/
 frontend/dist/
 
+
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
+/job-benchmark/
+

@@ -11,7 +11,10 @@ const stageForKind: Record<string, number> = {
   discovery: 0, filter: 1, eligibility: 2, matching: 3, resume: 4, validation: 5, application: 6, review: 7, submission: 8,
 };
 
-export function Automation({ state, mutate, busy }: PageProps) {
+type Reliability = { hours_observed: number; complete: boolean; metrics: Record<string, number | null> };
+
+export function Automation({ state, mutate, busy, revision }: PageProps) {
+  const {data: reliability, error: reliabilityError} = useResource<Reliability>("/api/reliability", revision);
   const timezone = state.options.timezone;
   const running = state.runs.find(run => run.status === "RUNNING");
   const phase = running && state.logs.find(log => log.detail.run_id === running.id && stageForKind[log.kind] !== undefined);
@@ -40,6 +43,14 @@ export function Automation({ state, mutate, busy }: PageProps) {
       </Panel>
     </div>
     <div className="content-grid">
+      <Panel title="24-hour reliability">
+        <ErrorNotice message={reliabilityError}/>
+        {!reliability && !reliabilityError && <Loading/>}
+        {reliability && <>
+          <p>{reliability.complete ? "Complete 24-hour observation window" : reliability.hours_observed + " of 24 hours observed"}</p>
+          <Details values={reliability.metrics}/>
+        </>}
+      </Panel>
       <Panel title="Preparation workflow">
         <ol className="workflow" aria-label="Automation steps">{workflow.map((name, index) =>
           <li key={name} className={"workflow-step " + (index === current ? "current" : "")}><span className="workflow-node"><Clock3 size={14}/></span><span>{name}</span></li>)}</ol>
@@ -73,8 +84,8 @@ export function Notifications({ mutate, revision, busy, state }: PageProps) {
     <Panel title="Inbox">
       <ErrorNotice message={error}/>{!data && !error && <Loading/>}
       {data?.length ? <ul className="entries">{data.map(item => <li key={item.id}><div><strong>{item.message}</strong><small>{label(item.kind)}{item.kind !== "daily_summary" ? " · " + item.count + " events" : ""}</small>
-        <Link className="text-link" to={item.kind === "ready" ? "/approvals" : item.kind === "daily_summary" ? "/analytics" : "/history"}>
-          {item.kind === "ready" ? "Open approval queue" : item.kind === "daily_summary" ? "Open analytics" : "Open application history"}
+        <Link className="text-link" to={item.kind === "ready" ? "/approvals" : item.kind === "daily_summary" ? "/analytics" : item.kind === "health" ? "/automation" : item.kind === "action" ? "/exceptions" : "/history"}>
+          {item.kind === "ready" ? "Open approval queue" : item.kind === "daily_summary" ? "Open analytics" : item.kind === "health" ? "Open automation" : item.kind === "action" ? "Open exceptions" : "Open application history"}
         </Link></div>
         <div className="inline">{!item.read && <Status value="Unread" tone="warn"/>}<small>{date(item.created, state.options.timezone)}</small></div></li>)}</ul> : data && <Empty>You have no notifications.</Empty>}
     </Panel>

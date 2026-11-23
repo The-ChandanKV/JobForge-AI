@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
 
-from .models import ApplicationEvent, Log, Notification, Run, Settings
+from .models import ApplicationEvent, Log, Notification, Run, Settings, WorkerLock
 from .schemas import Options
 
 
@@ -63,15 +63,23 @@ def deliver_review_notifications(session):
             return
         ready = sum(row.count for row in pending if row.kind == "ready")
         outcomes = sum(row.count for row in pending if row.kind == "outcome")
+        actions = sum(row.count for row in pending if row.kind == "action")
+        health = sum(row.count for row in pending if row.kind == "health")
         for row in pending:
             row.pending = False
         db.add(Log(kind="notice_batch", message="Review notifications grouped",
-                   detail={"ready": ready, "outcomes": outcomes}))
+                   detail={"ready": ready, "outcomes": outcomes, "actions": actions, "health": health}))
     parts = []
     if ready:
         parts.append(f"{ready} application{'s are' if ready != 1 else ' is'} ready for review.")
     if outcomes:
         parts.append(f"{outcomes} submission update{'s' if outcomes != 1 else ''}.")
+    if actions:
+        parts.append(f"Applications requiring information: {actions}.")
+    if health:
+        parts.append("Automation needs attention.")
+    if not parts:
+        return
     text = " ".join(parts)
     channels = []
     if options.desktop_notifications:
@@ -118,3 +126,40 @@ def record_daily_summary(session, at=None):
                 message=f"{day} · Runs finished {len(reports)}, resumes compiled {compiled}, "
                         f"applications prepared {prepared}, confirmations recorded {confirmed}.",
             ))
+
+
+def record_worker_health(session, at=None):
+    at = at or datetime.now(UTC)
+    with session.begin() as db:
+        lock = db.get(WorkerLock, 1)
+        if not lock or not lock.last_seen or at - datetime.fromisoformat(lock.last_seen) <= timedelta(seconds=60):
+            return False
+        db.execute(update(Settings).where(Settings.id == 1).values(next_run=Settings.next_run))
+        db.refresh(lock)
+        heartbeat = lock.last_seen
+        if at - datetime.fromisoformat(heartbeat) <= timedelta(seconds=60):
+            return False
+        prior = db.scalar(select(Log.id).where(Log.kind == "worker_health_notice",
+                                             Log.detail["last_heartbeat"].as_string() == heartbeat).limit(1))
+        if not prior:
+            db.add(Log(kind="worker_health_notice", message="Worker heartbeat is stale", detail={"last_heartbeat": heartbeat}))
+            db.add(Notification(kind="health", message="The scheduled worker has stopped reporting its heartbeat."))
+    return True
+
+
+def record_repeat_failures(session):
+    with session.begin() as db:
+        recent = db.scalars(select(Run).where(Run.trigger == "scheduled",
+                            Run.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"]))
+                            .order_by(Run.finished.desc()).limit(2)).all()
+        if len(recent) < 2 or any(run.status == "COMPLETED" for run in recent):
+            return
+        prior = db.scalar(select(Log.created).where(Log.kind == "scheduler_health_notice").order_by(Log.created.desc()).limit(1))
+        if prior:
+            recovered = db.scalar(select(Run.id).where(Run.trigger == "scheduled",
+                                  Run.status == "COMPLETED", Run.finished > prior).limit(1))
+            if not recovered:
+                return
+        db.add(Log(kind="scheduler_health_notice", message="Consecutive scheduled runs reported errors",
+                   detail={"run_id": recent[0].id}))
+        db.add(Notification(kind="health", message="Two or more consecutive scheduled runs reported errors."))

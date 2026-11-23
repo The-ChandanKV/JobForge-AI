@@ -107,8 +107,7 @@ def compile_pdf(tex, expected, bootstrap=False):
             raise ValueError("Tectonic compilation exceeded 70 seconds.") from exc
         document = work / "resume.pdf"
         if completed.returncode or not document.is_file():
-            raise ValueError("Compilation failed. Run the compiler bootstrap if the cache is missing.\n"
-                             + (completed.stderr or completed.stdout)[-1800:])
+            raise ValueError("Compilation failed. Run the compiler bootstrap if the cache is missing.")
         if document.stat().st_size > 5_000_000:
             raise ValueError("PDF exceeds 5 MB.")
         reader = PdfReader(document)
@@ -146,15 +145,16 @@ def generate(db, job, facts, options, request):
     meta = {**meta, "ranked_fact_ids": chosen or []}
     order = {identity: index for index, identity in enumerate(chosen or [])}
     ranked = sorted(candidates, key=lambda f: (-sum(has_skill(f["value"], skill) for skill in keywords),
-                                                order.get(f["id"], len(order))))
+                                                not f.get("prioritized"), order.get(f["id"], len(order))))
     selected = []
+    limits = {"experience": 7, "project": 6, "skill": 24, "education": 6, "certification": 5}
     for category in SECTIONS:
         rows = [f for f in ranked if f["category"] == category]
         if category in {"experience", "project"} and keywords:
             relevant = [f for f in rows if any(has_skill(f["value"], skill) for skill in keywords)]
             if relevant:
                 rows = relevant
-        selected.extend(rows)
+        selected.extend(rows[:limits.get(category, 6)])
     claims = [name_fact, *contact, *selected]
     bullets = [{"fact_id": f["id"], "text": edit_bullet(f["value"])} for f in selected
                if f["category"] in {"experience", "project"}]

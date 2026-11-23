@@ -200,9 +200,12 @@ def shortlist(posting, preferences):
         return False
     if expired(posting.deadline):
         return False
-    if preferences.maximum_mandatory_years is not None:
+    if preferences.maximum_mandatory_years is not None or preferences.minimum_mandatory_years is not None:
         years = minimum_years(requirement_lines(posting.description), "required")
-        if years is not None and years > preferences.maximum_mandatory_years:
+        if years is not None and (
+            (preferences.maximum_mandatory_years is not None and years > preferences.maximum_mandatory_years)
+            or (preferences.minimum_mandatory_years is not None and years < preferences.minimum_mandatory_years)
+        ):
             return False
     if preferences.locations and not any_match(posting.location, preferences.locations):
         return False
@@ -213,6 +216,8 @@ def shortlist(posting, preferences):
     if preferences.target_companies and not any_match(posting.company, preferences.target_companies):
         return False
     if any_match(posting.company, preferences.excluded_companies):
+        return False
+    if any_match(posting.role, preferences.excluded_roles):
         return False
     if any_match(posting.role + " " + posting.description, preferences.excluded_keywords):
         return False
