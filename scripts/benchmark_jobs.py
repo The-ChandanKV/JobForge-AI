@@ -18,7 +18,7 @@ from jobforge.schemas import Fact, Posting, Preferences, Source
 
 BOARDS = ("datadog", "cloudflare", "stripe", "anthropic", "mongodb", "elastic")
 ROLE = re.compile(r"software|backend|full.stack|machine learning|data engineer|developer|intern", re.I)
-FIELDS = ("required_skills", "preferred_skills", "experience_years", "graduation_year", "eligibility")
+FIELDS = ("required_skills", "preferred_skills", "experience_years", "graduation_year", "eligibility", "degree_requirement", "location_requirement", "authorization_requirement")
 BASE = Path("data/job-benchmark")
 
 
@@ -151,10 +151,19 @@ def evaluation(records, labels):
         if "eligibility" in label:
             false_eligible += int(result["eligibility"] == "ELIGIBLE" and label["eligibility"] != "ELIGIBLE")
             false_ineligible += int(result["eligibility"] == "INELIGIBLE" and label["eligibility"] != "INELIGIBLE")
+    pairs = correct_pairs = 0
+    rated = [(row["score"], reviewed[row["key"]]["relevance_grade"]) for row in results
+             if row["key"] in reviewed and "relevance_grade" in reviewed[row["key"]]]
+    for index, (score, grade) in enumerate(rated):
+        for other_score, other_grade in rated[index + 1:]:
+            if grade != other_grade:
+                pairs += 1
+                correct_pairs += int((score - other_score) * (grade - other_grade) > 0)
     metrics = {"jobs": len(results), "human_reviewed": sum(item["key"] in reviewed for item in results),
                "field_checks": checks, "exact_matches": correct, "missing_reviewed_requirements": missing,
                "false_eligible": false_eligible if checks.get("eligibility") else None,
                "false_ineligible": false_ineligible if checks.get("eligibility") else None,
+               "ranking_pairs_reviewed": pairs, "ranking_pair_accuracy": correct_pairs / pairs if pairs else None,
                "median_rule_ms": median(times) if times else None}
     return results, metrics
 

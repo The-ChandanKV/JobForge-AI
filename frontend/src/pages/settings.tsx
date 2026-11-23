@@ -64,14 +64,6 @@ export function ProfilePage(props: PageProps) {
         <Details values={{ "verified facts": current.facts.filter(fact => fact.verified).length, "draft facts": current.facts.filter(fact => !fact.verified).length, total: current.facts.length }}/></Panel>
       <Panel title="Import a resume">{draft || Object.keys(listDraft).length ? <p className="subtle">Save or discard your draft before importing another resume.</p> : <UploadForm {...props}/>}</Panel>
     </div>
-    {!!uploads?.length && <Panel title="Original resume" caption="Select an upload to read its text and review the extracted facts below.">
-      <label>Original document<select value={original} onChange={event => {
-        setOriginal(event.target.value); setScope(event.target.value ? "upload:" + event.target.value : undefined);
-      }}><option value="">Select an upload</option>{uploads.map(upload => <option value={upload.id} key={upload.id}>{upload.name}</option>)}</select></label>
-      {original && <a className="text-link" href={"/api/profile/uploads/" + original}>Download original</a>}
-      <ErrorNotice message={sourceError}/>
-      {sourceDocument && <pre className="resume-source">{sourceDocument.text}</pre>}
-    </Panel>}
     <form id="profile-form" className="content-grid" onSubmit={event => {event.preventDefault(); void saveProfile();}}>
       <Panel title="Job preferences" caption="Use commas to separate roles, locations, and keywords.">
         <Button type="button" variant="outline" onClick={() => setListDraft({...listDraft, roles: suggestedRoles.join(", ")})}>Use software engineering role suggestions</Button>
@@ -93,6 +85,15 @@ export function ProfilePage(props: PageProps) {
         <label>Relocation<input maxLength={160} value={String(current.preferences.relocation ?? "")} onChange={event => updatePreference("relocation", event.target.value)}/></label>
         <label className="check"><input type="checkbox" checked={Boolean(current.preferences.exclude_senior_roles)} onChange={event => updatePreference("exclude_senior_roles", event.target.checked)}/> Exclude senior roles</label></div>
       </Panel>
+      <div className={uploads?.length ? "split-grid" : "content-grid"}>
+    {!!uploads?.length && <Panel title="Original resume" caption="Select an upload to read its text and review the extracted facts beside it.">
+      <label>Original document<select value={original} onChange={event => {
+        setOriginal(event.target.value); setScope(event.target.value ? "upload:" + event.target.value : undefined);
+      }}><option value="">Select an upload</option>{uploads.map(upload => <option value={upload.id} key={upload.id}>{upload.name}</option>)}</select></label>
+      {original && <a className="text-link" href={"/api/profile/uploads/" + original}>Download original</a>}
+      <ErrorNotice message={sourceError}/>
+      {sourceDocument && <pre className="resume-source">{sourceDocument.text}</pre>}
+    </Panel>}
       <Panel title="Profile facts">
         <div className="toolbar">
           <label>Search facts<input type="search" value={query} onChange={event => setQuery(event.target.value)}/></label>
@@ -125,6 +126,7 @@ export function ProfilePage(props: PageProps) {
           </div>
         </article>)}</div> : <Empty>No facts match this view.</Empty>}
       </Panel>
+      </div>
     </form>
   </>;
 }

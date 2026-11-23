@@ -137,7 +137,8 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     if re.search(r"(?i)\b(work authori[sz]ation|no sponsorship|visa sponsorship|citizen(?:ship)?|right to work|authori[sz]ed to work)\b",
                  eligibility_text) and (not auth_matches or re.search(r"(?i)\b(sponsorship|citizen)", eligibility_text)):
         review.append("Review work authorization and sponsorship against the posting.")
-    if re.search(r"(?i)\b(?:reside|located|based)\s+in\b|\bonly\s+(?:in|within)\b", desc):
+    geographic_requirement = re.search(r"(?i)\b(?:reside|located|based)\s+in\b|\bonly\s+(?:in|within)\b", desc)
+    if geographic_requirement:
         review.append("Review geographic restrictions.")
     if (re.search(r"(?i)\b(?:mandatory|required|must hold)\b.{0,40}\b(?:certification|licen[cs]e|clearance)\b|\bcertification\s+required\b", desc)
             or any(re.search(r"(?i)\b(?:certification|licen[cs]e|clearance)\b", line) for line in required_lines)):
@@ -177,6 +178,9 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
         "required_skills": required, "missing_skills": missing, "preferred_skills": preferred,
         "relevant_projects": relevant["project"], "concerns": fail + review,
         "experience_years": years,
+        "degree_requirement": degree[0] if degree else None,
+        "location_requirement": geographic_requirement[0] if geographic_requirement else None,
+        "authorization_requirement": authorization[0] if authorization else None,
         "requirement_evidence": {category: lines[:15] for category, lines in requirements.items()},
         "confidence": "REVIEW" if eligibility == "NEEDS_REVIEW" else "RULE_VERIFIED",
         "graduation_year": int(graduation[1]) if graduation else None,
