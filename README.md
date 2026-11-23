@@ -1,5 +1,10 @@
 # JobForge AI
 
+## Real-world readiness
+
+Use Profile to verify your source facts, then choose public employer boards in Settings. The worker prepares eligible applications for review. [Onboarding and manual handoff](docs/REAL_WORLD_READINESS.md) · [Public benchmark](docs/JOB_MATCHING_EVALUATION.md) · [Reliability report](docs/24_HOUR_RELIABILITY.md)
+
+
 JobForge is a local job-search workspace. Import a resume, verify source facts, score job descriptions, compile tailored LaTeX PDFs, and manage an application queue. A separate worker runs discovery and preparation with the dashboard closed. The rules fallback works without any API key.
 
 **Start here** · [Setup for Windows, macOS, Linux, and Docker](docs/SETUP.md) · [Build the React workspace](docs/FRONTEND_INTEGRATION.md) · [Workspace test report](docs/UI_TEST_REPORT.md)

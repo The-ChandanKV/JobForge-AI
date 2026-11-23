@@ -1,5 +1,10 @@
 # Autonomy architecture
 
+## Phase 4 readiness
+
+Discovery and scoring continue when core evidence is missing. Scheduled real preparation waits for verified name, email, and career evidence. The API observes stale worker heartbeats while the scheduler runs independently. Configured cadence and run telemetry drive the rolling 24-hour report. [Reliability methodology](24_HOUR_RELIABILITY.md)
+
+
 ## Unattended preparation
 
 `AUTONOMOUS_PREPARATION` is the default. An enabled worker admits one due run, reads permitted ATS sources, normalizes and deduplicates listings, and filters out obvious mismatches before storing new jobs. It checks verified profile evidence, scores requirements and achievements separately, and selects qualifying roles. It generates LaTeX, verifies extracted PDF text against the rendered claims, records an application checkpoint, prepares supported forms, and updates the dashboard. These internal stages require no approval.

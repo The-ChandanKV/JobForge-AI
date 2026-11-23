@@ -1,0 +1,290 @@
+[
+  {
+    "source_key": "greenhouse:datadog:3851927",
+    "company": "datadog",
+    "role": "Senior Software Engineer - Distributed Systems",
+    "url": "https://careers.datadoghq.com/detail/3851927/?gh_jid=3851927",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:5390243",
+    "company": "cloudflare",
+    "role": "Senior Software Engineer, Durable Objects (DO)",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/5390243?gh_jid=5390243",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:6042172",
+    "company": "stripe",
+    "role": "Backend Engineer, Core Technology",
+    "url": "https://stripe.com/jobs/search?gh_jid=6042172",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4572744008",
+    "company": "anthropic",
+    "role": "Staff Software Engineer, iOS",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4572744008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7392902",
+    "company": "mongodb",
+    "role": "Senior Software Engineer, Forward Deployed AI Engineer",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7392902",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:7723819",
+    "company": "elastic",
+    "role": "Senior Software Engineer - Query Engine, Database Internals - Elasticsearch",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=7723819&gh_jid=7723819",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:datadog:3851935",
+    "company": "datadog",
+    "role": "Senior Software Engineer ",
+    "url": "https://careers.datadoghq.com/detail/3851935/?gh_jid=3851935",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:6578726",
+    "company": "cloudflare",
+    "role": "Senior Software Engineer, Workers Runtime",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/6578726?gh_jid=6578726",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:6176758",
+    "company": "stripe",
+    "role": "Backend/API Engineer, Money as a Service",
+    "url": "https://stripe.com/jobs/search?gh_jid=6176758",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4613568008",
+    "company": "anthropic",
+    "role": "Research Engineer, Machine Learning (Reinforcement Learning) ",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4613568008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7588895",
+    "company": "mongodb",
+    "role": "Senior Software Engineer, Atlas Clusters",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7588895",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:7784606",
+    "company": "elastic",
+    "role": "Principal Software Engineer - Query Engine, Database Internals - Elasticsearch",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=7784606&gh_jid=7784606",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:datadog:4599111",
+    "company": "datadog",
+    "role": "Senior Software Engineer - Distributed Systems",
+    "url": "https://careers.datadoghq.com/detail/4599111/?gh_jid=4599111",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:7053411",
+    "company": "cloudflare",
+    "role": "Staff/Principal Software Engineer - Security Platform",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/7053411?gh_jid=7053411",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:6447175",
+    "company": "stripe",
+    "role": "Full Stack Engineer, Link",
+    "url": "https://stripe.com/jobs/search?gh_jid=6447175",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4887959008",
+    "company": "anthropic",
+    "role": "Senior Software Security Engineer",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4887959008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7590735",
+    "company": "mongodb",
+    "role": "Senior Software Engineer, Forward Deployed AI Engineer",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7590735",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:8053891",
+    "company": "elastic",
+    "role": "Senior Developer Advocate",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=8053891&gh_jid=8053891",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:datadog:7985840",
+    "company": "datadog",
+    "role": "Senior Developer Advocate - Modern App Development",
+    "url": "https://careers.datadoghq.com/detail/7985840/?gh_jid=7985840",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:7276690",
+    "company": "cloudflare",
+    "role": "Senior Software Engineer, R2 Metadata",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/7276690?gh_jid=7276690",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:6567104",
+    "company": "stripe",
+    "role": "Full Stack Engineer, Developer & End User Experience Platform",
+    "url": "https://stripe.com/jobs/search?gh_jid=6567104",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4899511008",
+    "company": "anthropic",
+    "role": "Staff Software Engineer, Android",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4899511008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7613665",
+    "company": "mongodb",
+    "role": "Software Engineer 3, Data Pipeline",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7613665",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:8053905",
+    "company": "elastic",
+    "role": "Principal Software Engineer (Networking) - Platform Infra ",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=8053905&gh_jid=8053905",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:datadog:8094924",
+    "company": "datadog",
+    "role": "Program Manager, AI and Developer Community Content and Events",
+    "url": "https://careers.datadoghq.com/detail/8094924/?gh_jid=8094924",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:7302931",
+    "company": "cloudflare",
+    "role": "Software Engineer, Deploy at Scale",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/7302931?gh_jid=7302931",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:6717520",
+    "company": "stripe",
+    "role": "Software Engineer, Payments and Risk",
+    "url": "https://stripe.com/jobs/search?gh_jid=6717520",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4942024008",
+    "company": "anthropic",
+    "role": "Software Engineer, Beneficial Deployments ",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4942024008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7613695",
+    "company": "mongodb",
+    "role": "Software Engineer 2",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7613695",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:8066491",
+    "company": "elastic",
+    "role": "Senior Software Engineer - Storage Engine - Elasticsearch",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=8066491&gh_jid=8066491",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:datadog:8103045",
+    "company": "datadog",
+    "role": "Developer Engagement Lead",
+    "url": "https://careers.datadoghq.com/detail/8103045/?gh_jid=8103045",
+    "retrieved_at": "2026-11-23T06:48:57.375457+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:cloudflare:7309174",
+    "company": "cloudflare",
+    "role": "Software Engineer (Threat Intelligence), Cloudforce One",
+    "url": "https://boards.greenhouse.io/cloudflare/jobs/7309174?gh_jid=7309174",
+    "retrieved_at": "2026-11-23T06:49:09.608831+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:stripe:7208537",
+    "company": "stripe",
+    "role": "Software Engineer, Money Movement ",
+    "url": "https://stripe.com/jobs/search?gh_jid=7208537",
+    "retrieved_at": "2026-11-23T06:49:15.569750+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:anthropic:4951844008",
+    "company": "anthropic",
+    "role": "Staff+ Software Engineer, Safeguards",
+    "url": "https://job-boards.greenhouse.io/anthropic/jobs/4951844008",
+    "retrieved_at": "2026-11-23T06:49:23.448841+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:mongodb:7653008",
+    "company": "mongodb",
+    "role": "Senior Software Engineer, Server Networking Security (Rust)",
+    "url": "https://www.mongodb.com/careers/job/?gh_jid=7653008",
+    "retrieved_at": "2026-11-23T06:49:26.912749+00:00",
+    "review_status": "unreviewed"
+  },
+  {
+    "source_key": "greenhouse:elastic:8066493",
+    "company": "elastic",
+    "role": "Senior Software Developer - Vector Search - Elasticsearch",
+    "url": "https://jobs.elastic.co/jobs?gh_jid=8066493&gh_jid=8066493",
+    "retrieved_at": "2026-11-23T06:49:36.859298+00:00",
+    "review_status": "unreviewed"
+  }
+]

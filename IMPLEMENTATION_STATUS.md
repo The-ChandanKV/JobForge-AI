@@ -1,5 +1,10 @@
 # Implementation status
 
+## Phase 4
+
+Implemented verified onboarding, readiness gating, evidence-prioritized resume tailoring, manual handoff, rejection feedback, native Windows notifications, and durable reliability reporting. The public benchmark contains 36 postings and has no human-reviewed labels. Installation observation is underway. [Verification](docs/TEST_REPORT.md)
+
+
 ## One-click final approval
 
 | Feature | Status | Verification and remaining scope |

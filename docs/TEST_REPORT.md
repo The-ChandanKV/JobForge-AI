@@ -1,5 +1,18 @@
 # Test report
 
+## Phase 4 real-world readiness
+
+The final Windows regression run on November 23, 2026 collected and passed **47 pytest tests**, with one existing Starlette test-client deprecation warning. The 41-test entry below describes the original approval backend. Phase 3 React brought the count to 43, and Phase 4 added four cases. ESLint, three Vitest tests, TypeScript, the Vite production build, and both Chromium end-to-end flows passed.
+
+- Fixtures verify unverified resume import and provenance, the real-job preparation gate, rejection feedback without fact changes, and persisted scheduler metrics and deduplicated worker alerts.
+- Chromium exercised a compiled tailored PDF, exact application preparation, copyable manual fields, unsupported-portal handling, duplicate-safe exact approval, bulk approval, and a persisted synthetic receipt. Tests used isolated SQLite data, synthetic employers, and mocked employer transport.
+- A fresh migration completed through revision 0004 and Alembic found no outstanding operations. The existing database reports revision 0004 at head.
+- The live dashboard rendered Profile, Approval Queue and the new reliability panel. Both existing Windows tasks were running, and the worker heartbeat advanced after the test browser closed. The observation window was under one hour at verification.
+- Windows blocked the original PowerShell notification helper. The native notification process received the Windows Shell shown event for one synthetic alert in the interactive session. User acknowledgment and SMTP delivery were outside the verification.
+- The real workspace had no enabled boards and lacked verified career evidence. No real application or live employer API call was tested.
+
+[Public benchmark](JOB_MATCHING_EVALUATION.md) · [Scheduler observations](24_HOUR_RELIABILITY.md) · [Security audit](SECURITY_AUDIT.md)
+
 ## Phase 3 React workspace update
 
 Verified November 23, 2026, on the installed Windows workspace. The full suite passed **43 tests** with the existing Starlette test-client deprecation warning. Two mocked Greenhouse transport tests failed on the first full run because their hooks still referenced the preparation module after transport moved into the provider adapter. Both were corrected and passed in the full rerun.

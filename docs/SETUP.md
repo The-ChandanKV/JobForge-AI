@@ -1,5 +1,10 @@
 # Setup
 
+## Prepare a real workspace
+
+Import and verify name, email, and at least one career fact in Profile. Configure and enable employer boards in Settings. The desktop notification channel runs through the native Windows shell in an interactive session. Run the privacy check before pushing and check the observation window from Automation. [Readiness](REAL_WORLD_READINESS.md) · [Privacy audit](SECURITY_AUDIT.md)
+
+
 Build the React workspace before starting FastAPI on a non-Docker installation. The [frontend integration guide](FRONTEND_INTEGRATION.md) has the build and restart commands. Docker builds the workspace automatically.
 
 For a verified employer integration, configure server credentials and enable individually approved Greenhouse submission in Settings. Follow the [provider authorization and dry-run instructions](SUBMISSION_PERMISSIONS.md).
