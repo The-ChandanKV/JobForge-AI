@@ -33,7 +33,7 @@ export function Heading({ title, description, children }: { title: string; descr
 }
 
 export function Panel({ title, caption, children }: { title: string; caption?: string; children: ReactNode }) {
-  return <Card className="workspace-panel">{title && <CardHeader><h2>{title}</h2>{caption && <p>{caption}</p>}</CardHeader>}<CardContent>{children}</CardContent></Card>;
+  return <Card className="workspace-panel">{title && <CardHeader data-slot="card-header"><h2>{title}</h2>{caption && <p>{caption}</p>}</CardHeader>}<CardContent data-slot="card-content">{children}</CardContent></Card>;
 }
 
 export function Empty({ children }: { children: ReactNode }) {
