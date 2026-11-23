@@ -1,5 +1,22 @@
 # Test report
 
+## Phase 3 React workspace update
+
+Verified November 23, 2026, on the installed Windows workspace. The full suite passed **43 tests** with the existing Starlette test-client deprecation warning. Two mocked Greenhouse transport tests failed on the first full run because their hooks still referenced the preparation module after transport moved into the provider adapter. Both were corrected and passed in the full rerun.
+
+- ESLint, three Vitest tests, TypeScript and the production build passed.
+- Chromium exercised exact single-click approval, version-specific PDF preview, idempotent replay, bulk selection after review, per-application payload hashes, the receipt, and persisted notifications. A final Chromium rerun also verified that an unsupported application appears in Exceptions. Employer traffic was restricted to synthetic fixtures and mocked transport.
+- The previous-day summary test checked the configured time zone, excluded events beyond the day boundaries, and verified that a second worker tick did not add a second notification.
+- Live Chromium checked approval filters, the automation mode, and the disabled employer control. Both registered Windows tasks reported running and the API reported a fresh worker heartbeat, an enabled 60-minute schedule, and dry-run mode.
+
+| Area | Changed files |
+| --- | --- |
+| Review, exceptions and monitoring | `frontend/src/api.ts`, `frontend/src/domain.ts`, `frontend/src/pages/pipeline.tsx`, `frontend/src/pages/review-batch.tsx`, `frontend/src/pages/overview.tsx`, `frontend/src/pages/automation.tsx`, `frontend/src/pages/settings.tsx` |
+| Preparation and delivery | `jobforge/api.py`, `jobforge/applications.py`, `jobforge/submission.py`, `jobforge/notifications.py`, `jobforge/worker.py`, `scripts/review-notification.ps1` |
+| Regression coverage | `frontend/src/domain.test.ts`, `tests/test_autonomy.py`, `tests/test_final_submission.py`, `tests/test_workspace_e2e.py` |
+
+Live Greenhouse dispatch still requires an employer-authorized sandbox contract test. Lever and Ashby use manual handoff in JobForge. Visible Windows alerts, SMTP delivery, and other browser engines were outside this verification run.
+
 ## One-click approval and submission
 
 Verified on Windows on November 23, 2026. Development traffic used the local synthetic employer and mocked HTTP. Production employer dispatch stayed disabled throughout verification.

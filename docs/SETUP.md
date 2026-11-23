@@ -2,6 +2,8 @@
 
 Build the React workspace before starting FastAPI on a non-Docker installation. The [frontend integration guide](FRONTEND_INTEGRATION.md) has the build and restart commands. Docker builds the workspace automatically.
 
+For a verified employer integration, configure server credentials and enable individually approved Greenhouse submission in Settings. Follow the [provider authorization and dry-run instructions](SUBMISSION_PERMISSIONS.md).
+
 ## Prerequisites
 
 Install Python 3.11 or newer, Node.js 20 or newer for supported URL intake, and put the Tectonic binary on PATH. For assisted simulations install Playwright Chromium or set `JOBFORGE_BROWSER_EXECUTABLE` to an installed Chromium-based browser. The setup script downloads dependencies and a TeX bundle once. Application compiles use the cached bundle. [Tectonic releases](https://github.com/tectonic-typesetting/tectonic/releases)

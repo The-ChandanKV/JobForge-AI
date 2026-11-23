@@ -10,10 +10,10 @@ On this installation the employer adapter was tested with mocked transport and p
 
 ## Individual final approval
 
-1. In **Automation**, choose **Authorized employer API** and enable individually approved submission for the verified board. Keep the configured daily submission limit.
+1. In **Settings → Review and system health**, enable **Individually approved Greenhouse submission** for the verified board and save. Keep the configured daily submission limit.
 2. Prepare the current form and review the official destination, verified fields and exact PDF in **Approval Queue**. Click **Approve & Submit** for that application.
 3. The worker verifies the approval hash, eligibility, form and current verified facts. A distinct immutable approval is required for each selected application in a bulk review.
-4. Set dry-run again to disable live dispatch before an attempt is reserved. Editing the queued application invalidates its approval. A provider request already in progress may need reconciliation.
+4. Turn off the setting and save to restore dry-run before dispatch before an attempt is reserved. Editing the queued application invalidates its approval. A provider request already in progress may need reconciliation.
 
 Standing policies from earlier versions are retained as historical configuration. The current worker accepts final approval tasks exclusively. The workspace daily cap bounds Greenhouse dispatch attempts in the selected timezone. Lever, Ashby and other unconfigured portals use a manual handoff. [Approval workflow and provider matrix](APPROVAL_AND_SUBMISSION.md)
 

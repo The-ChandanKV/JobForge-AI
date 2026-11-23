@@ -4,12 +4,12 @@
 
 | Feature | Status | Verification and remaining scope |
 |---|---|---|
-| Approval Queue details, filters, sorting and editing | IMPLEMENTED_AND_TESTED | Review uses the persisted job and PDF snapshot. Unsupported portals route to manual handoff. |
+| Approval Queue details, filters, sorting and editing | IMPLEMENTED_AND_TESTED | The React queue uses the persisted job and PDF snapshot, includes provider-aware filters and sorting, and offers an official-link handoff. |
 | Exact one-click and bulk submission tasks | IMPLEMENTED_AND_TESTED | SHA-256 approval binding, concurrent click deduplication, bounded preflight retry, and at-most-once dispatch tested. |
 | Synthetic employer | IMPLEMENTED_AND_TESTED | Browser end-to-end preparation, preview, one-click approval and receipt. |
 | Greenhouse employer submission | MOCK_TRANSPORT_TESTED | Exact-board configuration and explicit approval required. Live contract awaits employer-authorized sandbox verification. |
 | Lever and Ashby | MANUAL_HANDOFF | Public discovery and official apply links. Employer submission APIs are documented in the provider matrix. |
-| Notifications | IMPLEMENTED | In-app notices and batch scheduling tested. Windows taskbar and opt-in SMTP delivery depend on the configured OS session and SMTP account. |
+| Notifications | IMPLEMENTED | In-app notices, batch scheduling, and a once-per-day summary in the configured time zone are covered by tests. Windows taskbar and opt-in SMTP delivery depend on the configured OS session and SMTP account. |
 
 [Final approval guide](docs/APPROVAL_AND_SUBMISSION.md) · [Test report and changed files](docs/TEST_REPORT.md)
 
