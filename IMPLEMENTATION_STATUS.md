@@ -1,5 +1,10 @@
 # Implementation status
 
+## Phase 7
+
+Implemented batch resume evidence review, identical-upload reuse, saved activation preferences, verified bulk employer selection, and a crash-safe cap of five jobs for first real preparation. Live preparation awaits career verification and user choices. [Results](docs/TEST_REPORT.md)
+
+
 ## Phase 6
 
 Implemented verified employer discovery, SmartRecruiters and Recruitee public feeds, source health, a bounded local semantic ranking option, durable job feedback, resume quality evidence, and a separate readiness checklist. Employer submission authorization is unchanged. The installed profile and board selections still need activation. [Verification](docs/TEST_REPORT.md)

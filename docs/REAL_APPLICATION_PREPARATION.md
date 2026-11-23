@@ -1,0 +1,9 @@
+# Real application preparation
+
+The worker preserves the original public job URL and JD, applies eligibility and relevance checks, selects verified fact IDs, and produces the exact LaTeX and compiled PDF stored with the application. The first run uses the compact template to favor a concise resume. It validates the rendered text and preserves selected evidence even if a resume needs an additional page. Each generated version captures its target mandatory and preferred skills, matching and missing evidence, and the source requirement lines. Resume Studio still shows project facts, rewritten bullets, their source IDs, and PDF quality checks.
+
+The Approval Queue orders recommendations by recorded availability and eligibility, match score, priority employer, publication date and verified deadline. Missing timestamps are not invented. The existing manual handoff has one **Review & Open Application** action, exact PDF download, copyable verified contact fields and saved answers, a copyable cover letter when available, and a completion checklist. Contact with real employer portals remains user-controlled. JobForge records a submission only when a legitimate confirmation is supplied or a supported authorized provider confirms it after exact approval.
+
+The isolated preparation regression supplied six fictional but provider-shaped public postings and included a configured mock board. The real-run workflow ignored that mock board, selected five, compiled and validated five PDFs with Tectonic, and saved five manual-handoff records without a submission receipt. The sixth job remained outside the reservation cap. This did not use the applicant's data.
+
+Live activation remains pending verified career evidence, saved preferences, and selected enabled boards. Public source preview verification is separate from ingestion into the real pipeline. [Activation steps](PHASE_7_ACTIVATION.md) · [Submission permissions](SUBMISSION_PERMISSIONS.md)

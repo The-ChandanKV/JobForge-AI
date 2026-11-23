@@ -1,5 +1,10 @@
 # Setup
 
+## First real preparation
+
+Open Activation after starting the installed application. Review the existing original resume facts, save target preferences, and verify and enable the boards you choose. The first real run stays in dry-run. [Activation guide](PHASE_7_ACTIVATION.md)
+
+
 ## Enable intelligent discovery
 
 Verify career evidence and set preferences in Profile. Open Settings → Discover employers, preview a verified source, then enable monitoring. Optional local model names configure semantic ranking and tailoring. The rules path remains available if a model is absent. [Discovery workflow](INTELLIGENT_JOB_DISCOVERY.md)

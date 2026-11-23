@@ -1,5 +1,10 @@
 # JobForge AI
 
+## Activate a personal search
+
+Open [Activation](http://127.0.0.1:8000/activation) to review original resume evidence, save your own preferences, and choose verified boards. [Activation guide](docs/PHASE_7_ACTIVATION.md) · [Preparation workflow](docs/REAL_APPLICATION_PREPARATION.md)
+
+
 ## Intelligent job discovery
 
 Verify and preview employer feeds in Settings. Job Intelligence explains the match, lists missing evidence, and shows preparation readiness. [Discovery](docs/INTELLIGENT_JOB_DISCOVERY.md) · [Matching](docs/MATCHING_ENGINE.md) · [Resume quality](docs/RESUME_OPTIMIZATION.md) · [Readiness](docs/APPLICATION_READINESS.md)

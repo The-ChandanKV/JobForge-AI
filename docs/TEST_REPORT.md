@@ -1,5 +1,19 @@
 # Test report
 
+## Phase 7 real-world activation
+
+The baseline passed all **51 pytest tests**. The final full Windows suite passed **54 tests**, with the existing Starlette test-client deprecation warning. The three frontend tests, lint, TypeScript, Vite production build, and Playwright flows passed. A fresh temporary SQLite database migrated through 0004 without outstanding schema operations.
+
+- The original upload snapshot, byte-identical replay, exact draft evidence acknowledgement, and atomic rollback of a stale selection passed.
+- Source proof rejects a posting from an unrelated ATS board. Bulk enabling is atomic. Exposure to real employer systems was confined to public read-only feed verification.
+- An isolated preparation run compiled five actual PDFs from six fictional provider-shaped postings and saved five manual-handoff records. The configured mock board was excluded from that run. There were zero submission receipts.
+- Live Chromium opened Activation and the existing profile evidence review. Both Windows tasks reported running, Ollama reported availability, and the worker heartbeat advanced with Chromium closed.
+- Public verification saved previews from seven boards with 2,360 returned listings before workspace selection and deduplication. The Bosch check was partial. No boards were enabled, and the live workspace gained no real jobs, eligible matches, resumes or applications. No personal facts or preferences were changed.
+- The next scheduled execution was verified at 21:55 IST on November 23, 2026. The preceding reliability read reported four observed scheduled runs and five missed schedule slots. The cause of missed slots was not inferred.
+- Dry-run remained enabled. No real submissions occurred.
+
+The changes are grouped in the [feature branch](https://github.com/The-ChandanKV/JobForge-AI/tree/feat/real-world-activation). [Activation guide](PHASE_7_ACTIVATION.md) · [Preparation verification](REAL_APPLICATION_PREPARATION.md)
+
 ## Phase 6 intelligent discovery and readiness
 
 The starting branch and GitHub heads contained Phase 4 at commit 8a1cfa7 and no separate Phase 5 branch or implementation. All **47** existing tests passed before changes. The Phase 6 full Windows run had **51 passed, zero failures**, with the existing Starlette test-client warning. An earlier targeted run caught a missing source-model import, which was corrected before the full run.

@@ -1,5 +1,10 @@
 # Autonomy architecture
 
+## First-run activation
+
+The activation admission stores its verified board identifiers on the existing run record. The worker rechecks readiness and reserves at most five eligible job IDs before compilation. Reservations persist through a recovered run. The action shares the existing worker lease, retry budget and duplicate-run protection. It does not change the hourly cadence. [First-run workflow](REAL_APPLICATION_PREPARATION.md)
+
+
 ## Intelligent hourly discovery
 
 The worker observes bounded public employer feeds, records source health, and keeps incomplete reads from retiring unseen jobs. Repeated fetches preserve aliases and immutable application approvals. Local semantic ranking is bounded and cached. Job readiness projects verifiable preparation without modifying application state. [Matching](MATCHING_ENGINE.md) · [Readiness](APPLICATION_READINESS.md)
