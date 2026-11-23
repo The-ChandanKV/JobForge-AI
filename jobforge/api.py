@@ -19,7 +19,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import employers, greenhouse, submission
+from . import activation, employers, greenhouse, submission
 from .applications import answers_digest, expected_pdf, prepare, reconcile, record, still_verified, submit_simulation
 from .config import ACCESS_TOKEN, MAX_UPLOAD, ROOT
 from .intelligence import application_readiness, feedback_for, semantic_cache_key
@@ -32,8 +32,8 @@ from .permissions import create_policy
 from .providers import clean_html, fold, intake, save_job
 from .reliability import cadence, report as reliability_report
 from .resumes import cover_letter, generate, recompile
-from .schemas import Edit, Generation, Intake, Options, PolicyRequest, Posting, Preferences, ProfileInput
-from .worker import day_start, future, initialize, lock_settings, queue, worker_status
+from .schemas import Edit, Fact, Generation, Intake, Options, PolicyRequest, Posting, Preferences, ProfileInput
+from .worker import ACTIVE, day_start, future, initialize, lock_settings, queue, worker_status
 
 
 @asynccontextmanager
@@ -146,6 +146,7 @@ def health():
 @app.get("/profile")
 @app.get("/notifications")
 @app.get("/intelligence")
+@app.get("/activation")
 @app.get("/legacy")
 def dashboard(request: Request):
     try:
@@ -256,19 +257,88 @@ def update_profile(payload: ProfileInput):
             facts.append(fact)
         row.facts = facts
         row.preferences = payload.preferences.model_dump()
-        threshold = Options.model_validate(db.get(Settings, 1).options).min_match_score
-        for job in db.scalars(select(Job)):
-            evaluate_saved_job(job, row.facts, payload.preferences, threshold)
-        queued = db.execute(select(SubmissionTask, Application).select_from(SubmissionTask)
-                            .join(FinalApproval, SubmissionTask.approval_id == FinalApproval.id)
-                            .join(Application, FinalApproval.application_id == Application.id)
-                            .where(SubmissionTask.status.in_(["QUEUED", "VALIDATING"]))).all()
-        for task, app in queued:
-            try:
-                submission.validate_snapshot(db, submission.context_for(db, app))
-            except submission.ReviewChanged as exc:
-                submission.stop_preflight(db, app, task, "profile_review_changed", str(exc))
+        refresh_profile_matches(db, row)
         return row_item(row, "facts preferences")
+
+
+def refresh_profile_matches(db, row):
+    threshold = Options.model_validate(db.get(Settings, 1).options).min_match_score
+    for job in db.scalars(select(Job)):
+        evaluate_saved_job(job, row.facts, Preferences.model_validate(row.preferences), threshold)
+    queued = db.execute(select(SubmissionTask, Application).select_from(SubmissionTask)
+                        .join(FinalApproval, SubmissionTask.approval_id == FinalApproval.id)
+                        .join(Application, FinalApproval.application_id == Application.id)
+                        .where(SubmissionTask.status.in_(["QUEUED", "VALIDATING"]))).all()
+    for task, app in queued:
+        try:
+            submission.validate_snapshot(db, submission.context_for(db, app))
+        except submission.ReviewChanged as exc:
+            submission.stop_preflight(db, app, task, "profile_review_changed", str(exc))
+
+
+class FactBatch(BaseModel):
+    facts: list[Fact] = Field(min_length=1, max_length=220)
+
+
+@app.post("/api/profile/verify", dependencies=AUTH)
+def verify_profile_facts(payload: FactBatch):
+    with Session.begin() as db:
+        submission.lock(db)
+        row = db.get(Profile, 1)
+        indexed = {fact["id"]: fact for fact in row.facts}
+        selected = {fact.id: fact.model_dump() for fact in payload.facts}
+        if len(selected) != len(payload.facts):
+            raise ValueError("Select each fact once.")
+        for identity, reviewed in selected.items():
+            existing = indexed.get(identity)
+            evidence = ("category", "label", "value", "source", "excerpt")
+            if (not existing or existing.get("unsupported") or not existing["source"].startswith("upload:")
+                    or not existing["excerpt"] or any(existing[key] != reviewed[key] for key in evidence)):
+                raise HTTPException(409, "A selected source fact changed. Refresh and review the current evidence.")
+        count = sum(not indexed[identity]["verified"] for identity in selected)
+        if count:
+            row.facts = [{**fact, "verified": True} if fact["id"] in selected else fact for fact in row.facts]
+            refresh_profile_matches(db, row)
+        return {"verified": count}
+
+
+class ActivationPreferences(BaseModel):
+    roles: list[str] = Field(max_length=40)
+    locations: list[str] = Field(max_length=40)
+    work_modes: list[Literal["remote", "hybrid", "onsite"]]
+    employment: list[str] = Field(max_length=20)
+
+
+@app.put("/api/activation/preferences", dependencies=AUTH)
+def activation_preferences(payload: ActivationPreferences):
+    with Session.begin() as db:
+        submission.lock(db)
+        row = db.get(Profile, 1)
+        updated = {**row.preferences, **payload.model_dump()}
+        row.preferences = Preferences.model_validate(updated).model_dump()
+        refresh_profile_matches(db, row)
+        return {"preferences_saved": True}
+
+
+@app.get("/api/activation", dependencies=AUTH)
+def activation_status():
+    with Session() as db:
+        return activation.snapshot(db)
+
+
+@app.post("/api/activation/run", status_code=202, dependencies=AUTH)
+def start_activation():
+    with Session.begin() as db:
+        settings = lock_settings(db)
+        setup, sources = activation.plan(db, settings)
+        if not setup["ready"]:
+            raise ValueError("Complete activation before running: " + ", ".join(
+                label for label, ready in setup["checks"].items() if not ready) + ".")
+        if db.scalar(select(Run.id).where(Run.status.in_(ACTIVE)).limit(1)):
+            raise HTTPException(409, "A run is already pending. Wait for the worker to finish.")
+        run = queue(db, "activation")
+        run.report = {"activation_boards": [[source.provider, source.board.casefold()] for source in sources]}
+        return {"id": run.id, "status": run.status}
 
 
 @app.post("/api/profile/upload", dependencies=AUTH)
@@ -277,6 +347,10 @@ def upload(file: UploadFile = File()):
     data = file.file.read(MAX_UPLOAD + 1)
     facts = parse_file(name, data)
     with Session.begin() as db:
+        submission.lock(db)
+        already = db.scalar(select(Upload.id).where(Upload.blob == data).order_by(Upload.created).limit(1))
+        if already:
+            return {"imported": 0, "upload": already, "already_imported": True}
         row = db.get(Profile, 1)
         if len(row.facts) + len(facts) > 220:
             raise ValueError("Profile holds up to 220 facts. Remove stale drafts before importing.")
@@ -316,6 +390,44 @@ def download_upload(upload_id: str):
 class MonitorEmployer(BaseModel):
     enabled: bool
     group: Literal["priority", "regular", "excluded"]
+
+
+class EmployerBatch(BaseModel):
+    keys: list[str] = Field(min_length=1, max_length=10)
+
+    def unique(self):
+        if len(set(self.keys)) != len(self.keys):
+            raise ValueError("Select each employer once.")
+        for key in self.keys:
+            employers.catalog_source(key)
+        return self.keys
+
+
+@app.post("/api/employers/verify-selected", dependencies=AUTH)
+def verify_employer_batch(request: EmployerBatch):
+    result = {}
+    for key in request.unique():
+        try:
+            result[key] = employers.verify_catalog_source(Session, key)
+        except (ValueError, httpx.HTTPError, KeyError, TypeError) as exc:
+            result[key] = {"error": str(exc) if isinstance(exc, ValueError) else type(exc).__name__}
+    return result
+
+
+@app.post("/api/employers/enable-selected", dependencies=AUTH)
+def enable_employer_batch(request: EmployerBatch):
+    keys = request.unique()
+    with Session.begin() as db:
+        settings = lock_settings(db)
+        preferences = Preferences.model_validate(db.get(Profile, 1).preferences)
+        priorities = {name.casefold() for name in preferences.priority_companies}
+        excluded = {name.casefold() for name in preferences.excluded_companies}
+        for key in keys:
+            source = employers.catalog_source(key)
+            company = source.company.casefold()
+            group = "excluded" if company in excluded else "priority" if company in priorities else "regular"
+            employers.update_monitor(db, settings, key, True, group)
+    return {"enabled": len(keys)}
 
 
 @app.get("/api/employers", dependencies=AUTH)

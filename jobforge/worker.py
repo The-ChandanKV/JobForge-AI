@@ -9,6 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from httpx import HTTPError
 
+from . import activation
 from .applications import prepare, reconcile, still_verified
 from .intelligence import priority_score, ranking_feedback, semantic_cache_key
 from .llm import model_status, semantic_relevance
@@ -178,10 +179,23 @@ def pipeline(run_id, lost):
         options = Options.model_validate(db.get(Settings, 1).options)
         preferences = Preferences.model_validate(profile.preferences)
         known_job_ids = set(db.scalars(select(Job.id)))
+        run = db.get(Run, run_id)
+        initial = bool(run and run.trigger == "activation")
+        initial_boards = {tuple(identity) for identity in run.report.get("activation_boards", [])} if initial else set()
+        if initial:
+            activation_setup, verified_sources = activation.plan(db)
+            verified = {(source.provider, source.board.casefold()) for source in verified_sources}
     profile_ready = readiness(profile.facts)["ready"]
     result = {"scanned": 0, "filtered": 0, "discovered": 0, "eligible": 0, "compiled": 0,
               "prepared": 0, "blocked_by_profile": 0, "exceptions": 0, "unchanged": 0, "sources": {}, "errors": []}
-    active_sources = [source for source in options.sources if source.enabled]
+    if initial and not activation_setup["ready"]:
+        result["errors"].append("Activation prerequisites changed before preparation. Open Activation to review.")
+        return result
+    active_sources = [source for source in options.sources if source.enabled and
+                      (not initial or (source.provider, source.board.casefold()) in initial_boards & verified)]
+    if initial and not active_sources:
+        result["errors"].append("No verified employer boards from the queued activation are enabled.")
+        return result
     for source in active_sources:
         if canceled(run_id, lost):
             return result
@@ -257,7 +271,7 @@ def pipeline(run_id, lost):
             Application.status.in_(["SUBMITTING", "SUBMISSION_UNCERTAIN"]),
             ~select(SubmissionTask.id).where(SubmissionTask.dispatch_key == Application.id).exists(),
         ).limit(100)).all()
-    for application_id in interrupted_dispatch:
+    for application_id in ([] if initial else interrupted_dispatch):
         if canceled(run_id, lost):
             return result
         reconcile(application_id)
@@ -288,7 +302,7 @@ def pipeline(run_id, lost):
     for candidate in candidates:
         if canceled(run_id, lost):
             break
-        if candidate.id not in discovered and candidate.detail["source"] != "manual":
+        if candidate.id not in discovered and (initial or candidate.detail["source"] != "manual"):
             continue
         if candidate.match.get("recommendation") != "PREPARE_APPLICATION" or not shortlist(
             Posting.model_validate(candidate.detail), preferences
@@ -320,12 +334,14 @@ def pipeline(run_id, lost):
                     continue
                 if resume and not previous_application and options.max_applications_per_day <= prepared_today:
                     continue
+                if initial and not activation.reserve(db, run_id, job.id):
+                    break
                 count = attempt(db, job)
             with Session.begin() as db:
                 job = db.get(Job, candidate.id)
                 if not resume:
                     attempts += 1
-                    resume = generate(db, job, profile.facts, options, Generation())
+                    resume = generate(db, job, profile.facts, options, Generation(template="compact" if initial else "classic"))
                     result["compiled"] += 1
                 db.execute(update(Job).where(Job.id == job.id, Job.status.not_in(["SKIPPED", "CLOSED"]))
                            .values(status="RESUME_READY"))

@@ -193,8 +193,12 @@ def generate(db, job, facts, options, request):
         raise ValueError("Verify at least one education, experience, skill, or project fact.")
     tex = TEMPLATES.get_template(request.template + ".tex").render(name=name, contact=contact, sections=sections)
     pdf, checks = compile_pdf(tex, rendered)
+    requirements = {key: job.match.get(key, []) for key in
+                    ("required_skills", "preferred_skills", "matching_skills", "missing_skills", "alternative_skill_groups")}
+    requirements["posting_requirements"] = job.match.get("requirement_evidence", {}).get("required", [])
     version = Resume(job_id=job.id, parent_id=request.parent_id, template=request.template, tex=tex, pdf=pdf,
                      report={**checks, "claims": claims, "bullets": bullets, "ai": meta, "posting_digest": posting_digest(job),
+                             "target_requirements": requirements,
                              "quality": quality_report(job, rendered, bullets, checks)})
     db.add(version)
     db.add(Log(kind="resume", message="Resume PDF validated", detail={"job_id": job.id, "ai": meta, "pages": checks["pages"]}))

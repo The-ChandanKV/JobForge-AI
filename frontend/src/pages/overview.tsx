@@ -73,8 +73,8 @@ export function Overview({ state, mutate, busy }: PageProps) {
       <Link className="metric-card" key={name} to={to}><div className="metric-top"><span>{name}</span><Icon size={17}/></div>
         <strong className="metric-value">{value}</strong><span className="metric-note">{note}</span></Link>
     )}</section>
-    {!state.profile_readiness.ready && <p><Link className="text-link" to="/profile">Verify career evidence for real preparation</Link></p>}
-    {!state.options.sources.some(source => source.enabled && source.provider !== "mock") && <p><Link className="text-link" to="/settings">Verify and enable employer boards</Link></p>}
+    {!state.profile_readiness.ready && <p><Link className="text-link" to="/activation">Complete real-world activation</Link></p>}
+    {!state.options.sources.some(source => source.enabled && source.provider !== "mock") && <p><Link className="text-link" to="/activation">Verify and enable employer boards</Link></p>}
     <div className="dashboard-grid">
       <Panel title="Career activity" caption="Current counts from saved records">
         <dl className="details">

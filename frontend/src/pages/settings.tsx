@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import type { Fact, Options, Preferences, Profile, Source, Upload } from "../api";
 import { date, label, searchMatch } from "../domain";
-import { Details, Empty, ErrorNotice, Heading, Panel, Status, useResource } from "../shared";
+import { Details, Empty, ErrorNotice, Heading, Modal, Panel, Status, useResource } from "../shared";
 import type { PageProps } from "../shared";
 import { EmployerDirectory } from "./employers";
 import { UploadForm } from "./studio";
 
 const categories = ["personal", "education", "experience", "skill", "project", "authorization", "certification", "other"];
 const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_roles", "excluded_keywords", "target_companies", "priority_companies", "industries", "excluded_companies"];
-const suggestedRoles = ["Software Engineer I", "Graduate Software Engineer", "Associate Software Engineer",
+export const suggestedRoles = ["Software Engineer I", "Graduate Software Engineer", "Associate Software Engineer",
   "Backend Developer", "Full Stack Developer", "Python Developer", "Data Engineer", "AI/ML Engineer",
   "Entry-level Software Developer", "Software Engineering Intern"];
 const preferenceChoices: Record<string, string[]> = {
@@ -28,8 +28,11 @@ export function ProfilePage(props: PageProps) {
   const { state, mutate, busy } = props;
   const [draft, setDraft] = useState<Profile>();
   const [listDraft, setListDraft] = useState<Record<string, string>>({});
+  const [params] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [unverified, setUnverified] = useState(false);
+  const [unverified, setUnverified] = useState(params.get("review") === "1");
+  const [reviewed, setReviewed] = useState<Fact[]>([]);
+  const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState<string>();
   const [scope, setScope] = useState<string>();
   const {data: uploads} = useResource<Upload[]>("/api/profile/uploads", props.revision);
@@ -37,6 +40,11 @@ export function ProfilePage(props: PageProps) {
   const {data: sourceDocument, error: sourceError} = useResource<{name: string; text: string}>(
     original ? "/api/profile/uploads/" + original + "/text" : null);
   const current = draft ?? state.profile;
+  const hasDraft = !!draft || Object.keys(listDraft).length > 0;
+  function toggleReviewed(fact: Fact) {
+    setReviewed(previous => previous.some(item => item.id === fact.id)
+      ? previous.filter(item => item.id !== fact.id) : [...previous, fact]);
+  }
   const facts = current.facts.filter(fact => searchMatch(query, fact.label, fact.value, fact.category) &&
     (!unverified || !fact.verified) && (!scope || fact.source === scope));
   const sources = [...new Set(current.facts.map(fact => fact.source))];
@@ -49,6 +57,14 @@ export function ProfilePage(props: PageProps) {
   }
 
   async function saveProfile() {
+    const modified = new Map(current.facts.map(fact => [fact.id, fact]));
+    const overwrites = state.profile.facts.some(fact => {
+      if (!fact.verified) return false;
+      const updated = modified.get(fact.id);
+      return !updated || !updated.verified || fact.label !== updated.label ||
+        fact.category !== updated.category || fact.value !== updated.value;
+    });
+    if (overwrites && !window.confirm("Save changes that edit, remove, or unverify existing verified facts?")) return;
     const preferences = {...current.preferences};
     for (const [key, text] of Object.entries(listDraft)) preferences[key] = text.split(",").map(item => item.trim()).filter(Boolean);
     const result = await mutate<Profile>("/api/profile", "PUT", {...current, preferences}, "Profile saved.");
@@ -96,6 +112,7 @@ export function ProfilePage(props: PageProps) {
       {sourceDocument && <pre className="resume-source">{sourceDocument.text}</pre>}
     </Panel>}
       <Panel title="Profile facts">
+        <p className="subtle">Read each original excerpt before adding a draft fact to the verification batch.</p>
         <div className="toolbar">
           <label>Search facts<input type="search" value={query} onChange={event => setQuery(event.target.value)}/></label>
           <label>Source<select value={scope ?? ""} onChange={event => setScope(event.target.value)}><option value="">All sources</option>{sources.map(source => <option key={source}>{source}</option>)}</select></label>
@@ -107,6 +124,10 @@ export function ProfilePage(props: PageProps) {
           }}><Plus size={16}/> Add fact</Button>
           {(draft || Object.keys(listDraft).length > 0) && <Button type="button" variant="ghost" onClick={() => {setDraft(undefined); setListDraft({});}}>Discard draft</Button>}
         </div>
+        {!!reviewed.length && !hasDraft && <div className="inline">
+          <Button type="button" variant="outline" onClick={() => setConfirming(true)}>Review selected facts ({reviewed.length})</Button>
+          <Button type="button" variant="ghost" onClick={() => setReviewed([])}>Clear selection</Button>
+        </div>}
         {facts.length ? <div className="fact-list">{facts.map(fact => <article className="fact" key={fact.id}>
           {editing === fact.id ? <div className="stack">
             <label>Category<select value={fact.category} onChange={event => updateFact(fact.id, {category: event.target.value, verified: false})}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
@@ -114,8 +135,11 @@ export function ProfilePage(props: PageProps) {
             <label>Value<textarea required maxLength={1500} value={fact.value} onChange={event => updateFact(fact.id, {value: event.target.value, verified: false})}/></label>
           </div> : <div><strong>{fact.label || "New fact"}</strong><p className="preserve">{fact.value}</p></div>}
           <p className="subtle">{label(fact.category)} · {fact.source}</p>
-          {fact.excerpt && <details><summary>Source excerpt</summary><p className="preserve">{fact.excerpt}</p></details>}
+          {fact.excerpt && <details open={unverified && !fact.verified ? true : undefined}><summary>Source excerpt</summary><p className="preserve">{fact.excerpt}</p></details>}
           <div className="inline">
+            {!hasDraft && !fact.verified && !fact.unsupported && fact.source.startsWith("upload:") && fact.excerpt &&
+              <label className="check"><input type="checkbox" checked={reviewed.some(item => item.id === fact.id)}
+                onChange={() => toggleReviewed(fact)}/> Select reviewed evidence</label>}
             <label className="check"><input type="checkbox" checked={fact.verified} disabled={fact.unsupported || !fact.label.trim() || !fact.value.trim()} onChange={event => updateFact(fact.id, {verified:event.target.checked})}/> Verified</label>
             <label className="check"><input type="checkbox" checked={!!fact.unsupported} onChange={event => updateFact(fact.id, {
               unsupported: event.target.checked, ...(event.target.checked ? {verified: false, prioritized: false} : {}),
@@ -129,6 +153,15 @@ export function ProfilePage(props: PageProps) {
       </Panel>
       </div>
     </form>
+    {confirming && <Modal title="Confirm source facts" close={() => setConfirming(false)}>
+      <p>Verify only the facts that accurately reflect your original resume.</p>
+      <ul className="entries">{reviewed.map(fact => <li key={fact.id}><div><strong>{fact.label} · {fact.value}</strong>
+        <small>{fact.excerpt}</small></div></li>)}</ul>
+      <Button disabled={busy || !reviewed.length} onClick={async () => {
+        const result = await mutate<{verified: number}>("/api/profile/verify", "POST", {facts: reviewed}, "Reviewed source facts verified.");
+        if (result) {setReviewed([]); setConfirming(false);}
+      }}>Verify {reviewed.length} selected facts</Button>
+    </Modal>}
   </>;
 }
 

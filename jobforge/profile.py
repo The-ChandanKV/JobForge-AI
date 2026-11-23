@@ -92,7 +92,12 @@ def candidates(text, source="text"):
         if section == "other":
             for url in re.findall(r"https?://[^\s<>]+", value):
                 url = url.rstrip(",.;)")
-                title = "GitHub" if re.match(r"https?://(?:www\.)?github\.com/", url, re.I) else "Portfolio"
+                if re.match(r"https?://(?:www\.)?github\.com/", url, re.I):
+                    title = "GitHub"
+                elif re.match(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/", url, re.I):
+                    title = "LinkedIn"
+                else:
+                    title = "Portfolio"
                 if (title, url) not in seen:
                     seen.add((title, url))
                     facts.append(Fact(category="personal", label=title, value=url[:1500], source=source, excerpt=value[:1500]))

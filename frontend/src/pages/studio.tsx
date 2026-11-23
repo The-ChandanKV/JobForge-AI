@@ -11,15 +11,17 @@ import { MatchDetails } from "./jobs";
 
 export function UploadForm({ mutate, busy }: Pick<PageProps, "mutate" | "busy">) {
   const [imported, setImported] = useState<number>();
+  const [existingOriginal, setExistingOriginal] = useState(false);
   return <form className="stack" onSubmit={async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const result = await mutate<{ imported: number }>("/api/profile/upload", "POST", new FormData(form));
-    if (result) {setImported(result.imported); form.reset();}
+    const result = await mutate<{ imported: number; already_imported?: boolean }>("/api/profile/upload", "POST", new FormData(form));
+    if (result) {setImported(result.imported); setExistingOriginal(Boolean(result.already_imported)); form.reset();}
   }}>
     <label>Original resume<input type="file" name="file" accept=".pdf,.txt,.tex" required/></label>
     <Button type="submit" variant="outline" disabled={busy}><UploadCloud size={16}/> Import resume</Button>
-    {imported !== undefined && <p role="status">{imported} draft facts imported. Verify the evidence in Profile before using it.</p>}
+    {imported !== undefined && <p role="status">{existingOriginal ? "This original is already saved. Review its existing draft facts."
+      : imported + " draft facts imported. Verify the evidence in Profile before using it."}</p>}
   </form>;
 }
 

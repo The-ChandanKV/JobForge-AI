@@ -54,7 +54,7 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                     "/jobs": "Job discovery", "/pipeline": "Application pipeline",
                     "/resume-studio": "AI Resume Studio", "/approvals": "Approval queue",
                     "/exceptions": "Exception queue", "/automation": "Automation center",
-                    "/intelligence": "Job Intelligence", "/history": "Application history", "/analytics": "Analytics", "/settings": "Settings",
+                    "/intelligence": "Job Intelligence", "/activation": "Activate JobForge", "/history": "Application history", "/analytics": "Analytics", "/settings": "Settings",
                     "/profile": "Candidate profile", "/notifications": "Notifications",
                 }.items():
                     page.goto(origin + route)

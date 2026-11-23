@@ -16,6 +16,7 @@ import { JobIntelligence } from "./pages/intelligence";
 import { Jobs } from "./pages/jobs";
 import { Pipeline } from "./pages/pipeline";
 import { Studio } from "./pages/studio";
+import { Activation } from "./pages/activation";
 import { Automation, Notifications } from "./pages/automation";
 import { ProfilePage, Settings } from "./pages/settings";
 import "./lovable.css";
@@ -31,6 +32,7 @@ const workspace = [
   {path: "/analytics", name: "Analytics", Icon: ChartNoAxesCombined},
 ];
 const operations = [
+  {path: "/activation", name: "Activation", Icon: Activity},
   {path: "/automation", name: "Automation", Icon: Activity},
   {path: "/approvals", name: "Approval queue", Icon: ClipboardList},
   {path: "/exceptions", name: "Exceptions", Icon: ShieldAlert},
@@ -176,6 +178,7 @@ function App() {
             <Route path="/intelligence" element={<JobIntelligence {...props}/>}/>
             <Route path="/pipeline" element={<Pipeline key="pipeline" mode="pipeline" {...props}/>}/>
             <Route path="/resume-studio" element={<Studio {...props}/>}/>
+            <Route path="/activation" element={<Activation {...props}/>}/>
             <Route path="/automation" element={<Automation {...props}/>}/>
             <Route path="/approvals" element={<Pipeline key="approvals" mode="approvals" {...props}/>}/>
             <Route path="/exceptions" element={<Pipeline key="exceptions" mode="exceptions" {...props}/>}/>

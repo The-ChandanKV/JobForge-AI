@@ -118,11 +118,17 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
               {application_id: id, payload_hash: review.payload_hash}, "Final approval recorded. Submission is queued for verification.")}><ShieldCheck size={16}/> Approve &amp; submit</Button>
           </>}
           {provider === "manual" && <>
-            <p>Download the saved PDF, open the employer form, and enter the applicable fields. Verify any required answers on the employer form before submitting.</p>
+            <ol className="bullets">
+              <li>Download the saved PDF and open the employer form.</li>
+              <li>Enter the verified contact fields and review any required answers and consent yourself.</li>
+              <li>After submitting on the employer site, return with the confirmation reference.</li>
+            </ol>
             <div className="stack">{Object.entries({...review.payload.fields, ...review.payload.saved_answers}).filter(([, value]) => typeof value === "string" && value).map(([field, value]) =>
               <div className="inline" key={field}><Button size="sm" variant="outline" onClick={() => void copyAnswer(String(value), field)}>Copy {field}</Button></div>)}</div>
             {copied && <p role="status">{copied}</p>}
           </>}
+          {provider === "manual" && review.payload.cover_letter && <Button size="sm" variant="outline"
+            onClick={() => void copyAnswer(review.payload.cover_letter!, "Cover letter")}>Copy cover letter</Button>}
           {provider === "manual" && applyLink && <Button asChild variant="outline">
             <a href={applyLink} target="_blank" rel="noreferrer">Review &amp; open application <ArrowUpRight size={15}/></a>
           </Button>}
@@ -231,6 +237,16 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
   const [page, setPage] = useState(1);
   const [title, description] = copy[mode];
   const approvalQueue = mode === "approvals";
+  const preferred = new Set(Array.isArray(state.profile.preferences.priority_companies) ?
+    state.profile.preferences.priority_companies.map(company => company.toLowerCase()) : []);
+  function recommended(a: Job, b: Job) {
+    return Number(b.available && b.match.eligibility === "ELIGIBLE") - Number(a.available && a.match.eligibility === "ELIGIBLE")
+      || compareJobs(a, b, "score")
+      || Number(preferred.has(b.company.toLowerCase())) - Number(preferred.has(a.company.toLowerCase()))
+      || compareJobs(a, b, "posted")
+      || compareJobs(a, b, "expiring")
+      || compareJobs(a, b, "discovered");
+  }
   const canDispatch = (app?: Application) => Boolean(app && app.review_status === "READY_FOR_REVIEW" && !app.summary.missing?.length
     && (app.submission_method === "mock" || (app.submission_method === "greenhouse" && state.authorized_board && !state.options.dry_run)));
   function toggleReview(review: Review) {
@@ -250,7 +266,7 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
     const day = (app?.created ?? job.created).slice(0, 10);
     return (!status || stage(job, app) === status) && (!start || day >= start) && (!end || day <= end) &&
       searchMatch(query, job.role, job.company, app?.confirmation ?? undefined);
-  }).sort((a, b) => approvalQueue ? ((queueSort === "recommended" ? Number(canDispatch(b.app)) - Number(canDispatch(a.app)) : 0) || compareJobs(a.job, b.job, queueSort)) : (b.app?.created ?? b.job.created).localeCompare(a.app?.created ?? a.job.created));
+  }).sort((a, b) => approvalQueue ? (queueSort === "recommended" ? recommended(a.job, b.job) : compareJobs(a.job, b.job, queueSort)) : (b.app?.created ?? b.job.created).localeCompare(a.app?.created ?? a.job.created));
   const pages = Math.max(1, Math.ceil(rows.length / 25));
   const currentPage = Math.min(page, pages);
   function select(key: "app" | "job", id?: string) {
