@@ -6,10 +6,11 @@ import sys
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
-from .models import Log, Notification, Settings, now
+from .models import ApplicationEvent, Log, Notification, Run, Settings
 from .schemas import Options
 
 
@@ -76,7 +77,7 @@ def deliver_review_notifications(session):
     if options.desktop_notifications:
         channels.append(("desktop", lambda: desktop_notification(text)))
     if options.approval_email and os.getenv("JOBFORGE_EMAIL_ENABLED") == "true":
-        channels.append(("email", lambda: send_email("JobForge application review", text + "\nhttp://127.0.0.1:8000/#approvals")))
+        channels.append(("email", lambda: send_email("JobForge application review", text + "\nhttp://127.0.0.1:8000/approvals")))
     for channel, send in channels:
         try:
             send()
@@ -84,3 +85,36 @@ def deliver_review_notifications(session):
             with session.begin() as db:
                 db.add(Log(kind="notification", message="Review notification delivery failed",
                            detail={"channel": channel, "error": type(exc).__name__}))
+
+
+def record_daily_summary(session, at=None):
+    """Record the last completed local day once, under the worker lease."""
+    with session.begin() as db:
+        options = Options.model_validate(db.get(Settings, 1).options)
+        local = (at or datetime.now(UTC)).astimezone(ZoneInfo(options.timezone))
+        midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+        previous_day = midnight - timedelta(days=1)
+        day = previous_day.date().isoformat()
+        if db.scalar(select(Log.id).where(Log.kind == "daily_summary",
+                                        Log.detail["day"].as_string() == day).limit(1)):
+            return
+        start = previous_day.astimezone(UTC).isoformat(timespec="microseconds")
+        end = midnight.astimezone(UTC).isoformat(timespec="microseconds")
+        reports = db.scalars(select(Run.report).where(
+            Run.finished >= start, Run.finished < end,
+            Run.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"]),
+        )).all()
+        confirmed = db.scalar(select(func.count()).select_from(ApplicationEvent).where(
+            ApplicationEvent.status == "SUBMITTED", ApplicationEvent.created >= start,
+            ApplicationEvent.created < end,
+        ))
+        prepared = sum(report.get("prepared", 0) for report in reports)
+        compiled = sum(report.get("compiled", 0) for report in reports)
+        db.add(Log(kind="daily_summary", message="Daily application summary evaluated",
+                   detail={"day": day, "prepared": prepared, "compiled": compiled, "confirmed": confirmed}))
+        if reports or confirmed:
+            db.add(Notification(
+                kind="daily_summary", pending=False,
+                message=f"{day} · Runs finished {len(reports)}, resumes compiled {compiled}, "
+                        f"applications prepared {prepared}, confirmations recorded {confirmed}.",
+            ))

@@ -160,6 +160,7 @@ def resume_item(row):
 def application_item(row):
     return {**row_item(row, "id job_id resume_id mode status confirmation created"),
             "review_status": submission.readiness(row),
+            "submission_method": (row.prepared_payload or {}).get("provider"),
             "summary": {k: v for k, v in row.summary.items() if k not in {"mock_key", "answers_digest"}}}
 
 

@@ -5,7 +5,6 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
-import httpx
 from playwright.sync_api import sync_playwright
 from sqlalchemy import select, update
 
@@ -137,19 +136,17 @@ def prepare(job_id, resume_id, profile, mode, eligibility, review_accepted=False
         db.add(ApplicationEvent(application_id=app.id, status="ELIGIBILITY_CHECKED",
                                 message=f"Preparation eligibility: {eligibility}."))
         record(db, app, "NEEDS_REVIEW", "Preparing application review.")
+    from .submission import PROVIDERS
+
     summary = dict(app.summary)
     values = {}
     provider = "manual"
     destination = job.detail.get("apply_url") or job.detail.get("url")
     if mock_browser:
         provider = "mock"
-        destination = mock_base() + f"/mock/{app.id}"
-        values = contacts(profile)
-        if "authorization" in answers:
-            values["authorization"] = answers["authorization"]
         try:
-            summary.update(browser_run(app, job, resume, values))
-            values = summary.pop("filled_values", {})
+            destination, values, form = PROVIDERS[provider].prepare(app, job, resume, profile, answers)
+            summary.update(form)
         except Exception as exc:
             with Session.begin() as db:
                 app = db.get(Application, app.id)
@@ -157,10 +154,9 @@ def prepare(job_id, resume_id, profile, mode, eligibility, review_accepted=False
                 record(db, app, "FAILED", f"Mock browser preparation failed ({type(exc).__name__}).")
             raise ValueError("Could not prepare the mock form. Check the server origin and Playwright browser.") from exc
     elif mode == "AUTHORIZED_AUTO" and greenhouse.verified_board() and greenhouse.endpoint(job) and eligibility == "ELIGIBLE":
-        with httpx.Client(timeout=15, follow_redirects=False) as client:
-            destination, values, form = greenhouse.preflight(client, job, profile)
-        summary.update(form)
         provider = "greenhouse"
+        destination, values, form = PROVIDERS[provider].prepare(app, job, resume, profile, answers)
+        summary.update(form)
         summary["integration"] = "greenhouse"
         summary["official_url"] = job.detail.get("apply_url")
     else:

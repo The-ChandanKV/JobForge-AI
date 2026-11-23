@@ -8,7 +8,7 @@ $notification.Visible = $true
 $notification.BalloonTipTitle = 'JobForge AI'
 $notification.BalloonTipText = $Message
 $notification.add_BalloonTipClicked({
-    Start-Process 'http://127.0.0.1:8000/#approvals'
+    Start-Process 'http://127.0.0.1:8000/approvals'
     [Windows.Forms.Application]::ExitThread()
 })
 $timer = [Windows.Forms.Timer]::new()

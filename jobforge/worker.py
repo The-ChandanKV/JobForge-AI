@@ -12,7 +12,7 @@ from .applications import prepare, reconcile, still_verified
 from .llm import model_status
 from .matching import analyze, evaluate_saved_job, shortlist
 from .models import Application, Job, JobSource, Log, Profile, Resume, Run, Session, Settings, SubmissionTask, WorkerLock, now, uid
-from .notifications import deliver_review_notifications, send_run_summary
+from .notifications import deliver_review_notifications, record_daily_summary, send_run_summary
 from .submission import process_one
 from .providers import fetch_board, save_job
 from .resumes import generate
@@ -299,6 +299,7 @@ def step():
         refresh_model_status(owner)
         process_one(Session)
         deliver_review_notifications(Session)
+        record_daily_summary(Session)
         with Session.begin() as db:
             for unfinished in db.scalars(select(Run).where(Run.status == "RUNNING")):
                 if unfinished.attempts < 2 and not unfinished.canceled:

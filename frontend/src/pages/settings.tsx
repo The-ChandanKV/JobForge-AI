@@ -116,6 +116,10 @@ export function Settings({ state, mutate, busy }: PageProps) {
   const [draft, setDraft] = useState<Partial<Options>>({});
   const current = {...state.options, ...draft};
   const sources = current.sources;
+  const authorizedMode = current.mode === "AUTHORIZED_AUTO";
+  function setSubmissionMode(enabled: boolean) {
+    setDraft(previous => ({...previous, mode: enabled ? "AUTHORIZED_AUTO" : "ASSISTED", dry_run: !enabled}));
+  }
   function update<K extends keyof Options>(name: K, value: Options[K]) {
     setDraft(previous => ({...previous, [name]: value}));
   }
@@ -168,6 +172,11 @@ export function Settings({ state, mutate, busy }: PageProps) {
       </Panel>
       <Panel title="Review and system health">
         <div className="inline"><Status value="Final approval required" tone="good"/><Status value={"Worker " + state.worker.status}/></div>
+        <label className="check"><input type="checkbox" checked={authorizedMode && !current.dry_run}
+          disabled={!state.authorized_board && !authorizedMode}
+          onChange={event => setSubmissionMode(event.target.checked)}/> Enable individually approved Greenhouse submission</label>
+        <p className="subtle">{state.authorized_board ? "Final approval is required for each application. Save settings to apply this change."
+          : "A verified employer board must be configured on the server to enable this option."}</p>
         <Details values={{ "automation mode": label(current.automation_mode), "application mode": label(current.mode),
           "dry run": current.dry_run ? "Enabled" : "Disabled by server configuration", "authorized board": state.authorized_board,
           "last heartbeat": date(state.worker.last_heartbeat), "last successful run": date(state.worker.last_success),

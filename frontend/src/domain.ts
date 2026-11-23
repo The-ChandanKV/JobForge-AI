@@ -37,7 +37,7 @@ export function label(value?: string | null) {
 }
 
 export function date(value?: string | null, timezone?: string) {
-  if (!value) return "—";
+  if (!value || !Number.isFinite(Date.parse(value))) return "—";
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: timezone });
 }
 

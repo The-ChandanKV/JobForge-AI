@@ -27,13 +27,14 @@ export function Automation({ state, mutate, busy }: PageProps) {
     </Heading>
     <div className="split-grid studio-top">
       <Panel title="Worker" caption={timezone}>
+        <p>Autonomous Preparation + Manual Final Approval</p>
         <div className="inline"><Activity size={17}/><Status value={state.worker.status} tone={state.worker.status === "RUNNING" ? "good" : "warn"}/></div>
         <Details values={{ "current stage": current !== undefined ? workflow[current] : running ? "Run active" : "Idle",
           "last heartbeat": date(state.worker.last_heartbeat, timezone), "last success": date(state.worker.last_success, timezone), "queued or running": state.worker.pending, "internal retries or exceptions": retries.length }}/>
       </Panel>
       <Panel title="Today’s automation" caption={timezone}>
         <p className="inline"><CalendarClock size={17}/> Next scheduled execution {date(state.next_run, timezone)}</p>
-        <Details values={{ "jobs scanned": state.daily.scanned, "jobs filtered": state.daily.filtered,
+        <Details values={{ "jobs discovered": state.daily.new_jobs, "jobs scanned": state.daily.scanned, "jobs filtered": state.daily.filtered,
           "resumes compiled": state.daily.compiled, "applications prepared": state.daily.prepared, "failed runs": state.daily.failed_runs }}/>
         <Link className="text-link" to="/settings">Manage automation settings</Link>
       </Panel>
@@ -71,7 +72,10 @@ export function Notifications({ mutate, revision, busy, state }: PageProps) {
     </Heading>
     <Panel title="Inbox">
       <ErrorNotice message={error}/>{!data && !error && <Loading/>}
-      {data?.length ? <ul className="entries">{data.map(item => <li key={item.id}><div><strong>{item.message}</strong><small>{label(item.kind)} · {item.count} events</small></div>
+      {data?.length ? <ul className="entries">{data.map(item => <li key={item.id}><div><strong>{item.message}</strong><small>{label(item.kind)}{item.kind !== "daily_summary" ? " · " + item.count + " events" : ""}</small>
+        <Link className="text-link" to={item.kind === "ready" ? "/approvals" : item.kind === "daily_summary" ? "/analytics" : "/history"}>
+          {item.kind === "ready" ? "Open approval queue" : item.kind === "daily_summary" ? "Open analytics" : "Open application history"}
+        </Link></div>
         <div className="inline">{!item.read && <Status value="Unread" tone="warn"/>}<small>{date(item.created, state.options.timezone)}</small></div></li>)}</ul> : data && <Empty>You have no notifications.</Empty>}
     </Panel>
   </>;

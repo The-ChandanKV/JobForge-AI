@@ -59,6 +59,7 @@ export interface Job {
   url?: string;
   apply_url?: string;
   description?: string;
+  posted?: string | null;
   available: boolean;
   status: string;
   created: string;
@@ -74,6 +75,7 @@ export interface Application {
   mode: string;
   status: string;
   review_status: string;
+  submission_method?: string;
   confirmation: string | null;
   created: string;
   summary: {
@@ -81,6 +83,7 @@ export interface Application {
     external_confirmation?: boolean;
     confirmed_at?: string;
     missing?: string[];
+    exception?: string;
     checkpoint?: string;
     integration?: string;
     reason?: string;
@@ -140,6 +143,7 @@ export interface Review {
   job: Job;
   payload: {
     provider?: string;
+    eligibility?: string;
     fields?: Record<string, unknown>;
     saved_answers?: Record<string, string>;
     pending?: string[];
@@ -153,7 +157,7 @@ export interface Review {
   readiness: string;
   approvable: boolean;
   refusal: string | null;
-  task: { status: string; result?: string; attempted_at?: string; finished_at?: string } | null;
+  task: { status: string; result?: string; provider?: string; approved_at?: string; attempted_at?: string; finished_at?: string; preflight_attempts?: number } | null;
 }
 
 export type Event = { status: string; message: string; created: string };

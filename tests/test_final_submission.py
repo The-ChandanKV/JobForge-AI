@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from jobforge import api, applications, notifications, submission, worker
-from jobforge.models import Application, Base, FinalApproval, Notification, Profile, Receipt, Resume, Settings, SubmissionTask
+from jobforge.models import Application, ApplicationEvent, Base, Log, Run, FinalApproval, Notification, Profile, Receipt, Resume, Settings, SubmissionTask
 from jobforge.providers import save_job
 from jobforge.schemas import Fact, Posting
 
@@ -216,6 +216,27 @@ def test_notifications_batch_both_ready_applications_and_are_readable(db_session
         assert all(item["read"] for item in client.get("/api/notifications").json())
     with db_sessions() as db:
         assert db.scalar(select(func.count()).select_from(Notification).where(Notification.pending.is_(True))) == 1
+
+
+def test_daily_summary_uses_previous_local_day_and_records_once(db_sessions, fake_browser):
+    application = prepared(db_sessions)
+    with db_sessions.begin() as db:
+        db.get(Settings, 1).options = {**db.get(Settings, 1).options, "timezone": "Asia/Kolkata"}
+        for finished, count in [("2026-01-03T18:29:59+00:00", 40),
+                                ("2026-01-03T18:30:01+00:00", 2),
+                                ("2026-01-04T18:30:01+00:00", 80)]:
+            db.add(Run(status="COMPLETED", trigger="scheduled", finished=finished,
+                       report={"compiled": count, "prepared": count}))
+        db.add(ApplicationEvent(application_id=application.id, status="SUBMITTED",
+                                message="Synthetic receipt", created="2026-01-04T12:00:00+00:00"))
+    at = datetime(2026, 1, 4, 20, tzinfo=UTC)
+    notifications.record_daily_summary(db_sessions, at)
+    notifications.record_daily_summary(db_sessions, at + timedelta(minutes=5))
+    with db_sessions() as db:
+        notice = db.scalars(select(Notification).where(Notification.kind == "daily_summary")).one()
+        assert notice.message == "2026-01-04 · Runs finished 1, resumes compiled 2, applications prepared 2, confirmations recorded 1."
+        assert not notice.pending
+        assert db.scalar(select(func.count()).select_from(Log).where(Log.kind == "daily_summary")) == 1
 
 
 def test_greenhouse_uses_only_final_approval_and_verifies_mocked_response(db_sessions, monkeypatch):

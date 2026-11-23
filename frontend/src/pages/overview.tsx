@@ -74,7 +74,15 @@ export function Overview({ state, mutate, busy }: PageProps) {
       <div className="content-grid">
         <Panel title="Automation">
           <p className="inline"><Activity size={16}/><Status value={state.worker.status} tone={state.worker.status === "RUNNING" ? "good" : "warn"}/></p>
+          <p>Autonomous Preparation + Manual Final Approval</p>
           <p>Next run {date(state.next_run, state.options.timezone)} · {state.worker.pending} active or queued</p>
+          <dl className="details">
+            <div><dt>Discovered today</dt><dd>{state.daily.new_jobs}</dd></div>
+            <div><dt>Eligible jobs</dt><dd>{state.jobs.filter(job => job.available && job.match.eligibility === "ELIGIBLE").length}</dd></div>
+            <div><dt>Approved</dt><dd>{state.applications.filter(app => app.status === "APPROVED").length}</dd></div>
+            <div><dt>Failed</dt><dd>{state.applications.filter(app => ["FAILED", "SUBMISSION_FAILED"].includes(app.review_status)).length}</dd></div>
+            <div><dt>Needs manual action</dt><dd>{state.applications.filter(app => ["NEEDS_MANUAL_ACTION", "SUBMISSION_UNCERTAIN", "SUBMISSION_BLOCKED"].includes(app.review_status) || (app.submission_method === "manual" && awaitsReview(app))).length}</dd></div>
+          </dl>
           <Link className="text-link" to="/automation">View automation <ArrowUpRight size={14}/></Link>
         </Panel>
         <Panel title="Recent activity">

@@ -39,12 +39,22 @@ class Context:
 
 
 class ApplicationProvider(Protocol):
+    def prepare(self, application: Application, job: Job, resume: Resume,
+                profile: Profile, answers: dict) -> tuple[str, dict, dict]: ...
     def validate(self, context: Context) -> None: ...
     def submit(self, context: Context) -> str | None: ...
     def verify_submission(self, db, context: Context, result: str | None) -> str | None: ...
 
 
 class MockProvider:
+    def prepare(self, application, job, resume, profile, answers):
+        destination = forms.mock_base() + f"/mock/{application.id}"
+        values = forms.contacts(profile)
+        if "authorization" in answers:
+            values["authorization"] = answers["authorization"]
+        summary = forms.browser_run(application, job, resume, values)
+        return destination, summary.pop("filled_values", {}), summary
+
     def validate(self, context):
         result = forms.browser_run(context.application, context.job, context.resume, context.payload["fields"])
         if (result["missing"] or result.get("form_digest") != context.payload["form_digest"]
@@ -60,9 +70,12 @@ class MockProvider:
 
 
 class GreenhouseProvider:
-    def validate(self, context):
+    def prepare(self, application, job, resume, profile, answers):
         with httpx.Client(timeout=15, follow_redirects=False) as client:
-            url, values, form = greenhouse.preflight(client, context.job, context.profile)
+            return greenhouse.preflight(client, job, profile)
+
+    def validate(self, context):
+        url, values, form = self.prepare(context.application, context.job, context.resume, context.profile, {})
         payload = context.payload
         if (form["missing"] or url != payload["destination"] or values != payload["fields"]
                 or form["form_digest"] != payload["form_digest"]):

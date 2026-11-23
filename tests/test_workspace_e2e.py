@@ -104,36 +104,62 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 expect(page.get_by_role("heading", name="Prepared application")).to_be_visible()
                 expect(page.get_by_role("button", name="Approve & submit")).to_have_count(0)
 
+                options = page.request.get(origin + "/api/state").json()["options"]
+                options["sources"].append({"provider": "mock", "board": "fixture-textarea",
+                                           "company": "Synthetic bulk employer", "enabled": True})
+                assert page.request.put(origin + "/api/settings", data=options).ok
                 worker = subprocess.Popen([sys.executable, "-m", "jobforge.worker"], env=env,
                                           stdout=server_log, stderr=subprocess.STDOUT)
                 deadline = time.monotonic() + 60
-                mock = None
-                while mock is None and time.monotonic() < deadline:
+                mocks = []
+                while len(mocks) < 2 and time.monotonic() < deadline:
                     snapshot = page.request.get(origin + "/api/state").json()
-                    mock = next((item for item in snapshot["applications"]
-                                 if item["status"] == "APPLICATION_PREPARED" and item["summary"].get("browser")), None)
-                    if mock is None:
+                    mocks = [item for item in snapshot["applications"]
+                             if item["status"] == "APPLICATION_PREPARED" and item["summary"].get("browser")]
+                    if len(mocks) < 2:
                         time.sleep(0.4)
-                assert mock is not None, snapshot["runs"]
+                assert len(mocks) == 2, snapshot["runs"]
+                mock, bulk = mocks
                 page.goto(origin + "/approvals?app=" + mock["id"])
                 approval = page.get_by_role("dialog", name="Application details")
-                approval.get_by_role("button", name="Approve & submit").click()
-                confirm = page.get_by_role("dialog", name="Confirm final approval")
                 digest = page.request.get(origin + "/api/applications/" + mock["id"] + "/review").json()["payload_hash"]
-                expect(confirm.get_by_text(digest, exact=True)).to_be_visible()
+                expect(approval.get_by_text(digest, exact=True)).to_be_visible()
+                approval.get_by_text("Saved resume PDF", exact=True).click()
+                expect(approval.get_by_title("Application resume PDF")).to_be_visible()
                 with page.expect_response(lambda item: item.url.endswith("/approve-submit")) as accepted:
-                    confirm.get_by_role("button", name="Confirm approval and queue submission").click()
+                    approval.get_by_role("button", name="Approve & submit").click()
                 assert accepted.value.status == 202, accepted.value.text()
                 assert accepted.value.request.post_data_json == {"application_id": mock["id"], "payload_hash": digest}
                 expect(approval.get_by_text("Final approval recorded", exact=False)).to_be_visible()
                 expect(approval.get_by_text("Simulation receipt", exact=True)).to_be_visible(timeout=45000)
                 approval.get_by_role("button", name="Close").click()
+                replay = page.request.post(origin + "/api/applications/" + mock["id"] + "/approve-submit",
+                                           data={"application_id": mock["id"], "payload_hash": digest})
+                assert replay.status == 202 and replay.json()["id"] == accepted.value.json()["id"]
+
+                page.get_by_label("Filter applications").select_option("submitted")
+                expect(page.get_by_text("Simulation receipt", exact=True)).to_be_visible()
+                page.goto(origin + "/approvals?app=" + bulk["id"])
+                approval.get_by_role("button", name="Select reviewed application").click()
+                approval.get_by_role("button", name="Close").click()
+                page.get_by_role("button", name="Review selected submissions").click()
+                batch = page.get_by_role("dialog", name="Confirm selected submissions")
+                bulk_digest = page.request.get(origin + "/api/applications/" + bulk["id"] + "/review").json()["payload_hash"]
+                expect(batch.get_by_text(bulk_digest, exact=True)).to_be_visible()
+                with page.expect_response(lambda item: item.url.endswith("/bulk-review")) as batch_result:
+                    batch.get_by_role("button", name="Approve & submit selected").click()
+                assert batch_result.value.status == 202, batch_result.value.text()
+                assert batch_result.value.request.post_data_json == {"reviews": [
+                    {"application_id": bulk["id"], "payload_hash": bulk_digest}]}
+                expect(page.get_by_text("Final approvals recorded", exact=False)).to_be_visible()
+
                 page.goto(origin + "/notifications")
                 button = page.get_by_role("button", name="Mark all as read")
                 expect(button).to_be_enabled()
                 button.click()
                 expect(button).to_be_disabled()
                 page.goto(origin + "/settings")
+                expect(page.get_by_label("Enable individually approved Greenhouse submission")).to_be_disabled()
                 page.get_by_label("Interval minutes", exact=True).fill("120")
                 page.get_by_role("button", name="Save settings").click()
                 expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
