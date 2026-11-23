@@ -17,6 +17,7 @@ body { font-size: 14px; line-height: 1.5; }
 .page-actions { flex-wrap: wrap; }
 .metric-card { min-height: 118px; padding: 15px; border-radius: 10px; }
 .metric-top, .metric-note { font-size: 12px; }
+.metric-top { min-height: 36px; align-items: flex-start; }
 .metric-top svg, .text-link, .bar-fill { color: var(--brand); fill: var(--brand); }
 .metric-top svg, .text-link svg { fill: none; }
 .metric-value { font-size: 27px; }
@@ -156,3 +157,12 @@ dialog::backdrop { background: color-mix(in oklab, black 58%, transparent); back
 }
 
 .original-excerpts { max-height: 55dvh; overflow: auto; overflow-wrap: anywhere; }
+
+@media (max-width: 620px) {
+  .responsive-table, .responsive-table tbody { display: block; }
+  .responsive-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .responsive-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 10px; padding-block: 11px; border-top: 1px solid var(--line); }
+  .responsive-table td, .responsive-table td:first-child { display: block; min-width: 0; padding: 0; border: 0; overflow-wrap: anywhere; }
+  .responsive-table td:first-child { grid-column: 1 / -1; }
+  .responsive-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--muted-foreground); font-size: 11px; }
+}

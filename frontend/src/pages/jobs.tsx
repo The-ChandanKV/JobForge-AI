@@ -92,11 +92,11 @@ export function Jobs(props: PageProps) {
         <label>Sort<select value={filters.sort} onChange={event => filter("sort", event.target.value)}><option value="date">Newest</option><option value="score">Highest match</option></select></label>
         {qualified && <Button variant="outline" onClick={() => param("qualified")}>Clear qualified filter</Button>}
       </div>
-      {rows.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Posting</th><th>Source</th><th>Match</th><th>Eligibility</th><th>Status</th></tr></thead>
+      {rows.length ? <div className="table-wrap"><table className="data-table responsive-table" role="table"><thead><tr><th>Posting</th><th>Source</th><th>Match</th><th>Eligibility</th><th>Status</th></tr></thead>
         <tbody>{rows.slice((activePage - 1) * size, activePage * size).map(job => <tr key={job.id}>
           <td><button className="flat-button" onClick={() => param("job", job.id)}><Company job={job}/></button></td>
-          <td>{label(job.source)}</td><td>{typeof job.match.match_score === "number" ? <span className="score-pill">{job.match.match_score}%</span> : "—"}</td>
-          <td><Status value={job.match.eligibility}/></td><td><Status value={job.status}/></td>
+          <td data-label="Source">{label(job.source)}</td><td data-label="Match">{typeof job.match.match_score === "number" ? <span className="score-pill">{job.match.match_score}%</span> : "—"}</td>
+          <td data-label="Eligibility"><Status value={job.match.eligibility}/></td><td data-label="Status"><Status value={job.status}/></td>
         </tr>)}</tbody></table></div> : <Empty>{state.jobs.length ? "No jobs match the selected filters." : "Add a posting or run automation to discover jobs."}</Empty>}
       <div className="pagination"><span>{rows.length} jobs · Page {activePage} of {pages}</span>
         <Button variant="outline" size="icon" aria-label="Previous page" disabled={activePage === 1} onClick={() => setPage(activePage - 1)}><ChevronLeft size={16}/></Button>

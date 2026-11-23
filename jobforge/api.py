@@ -97,6 +97,11 @@ async def handle_conflict(_, exc):
     return JSONResponse({"detail": "Concurrent record update. Refresh and try again."}, status_code=409)
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse(ROOT / "static" / "favicon.ico", media_type="image/x-icon")
+
+
 @app.get("/health")
 def health():
     with Session() as db:

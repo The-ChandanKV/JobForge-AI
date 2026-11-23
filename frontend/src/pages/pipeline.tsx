@@ -96,7 +96,7 @@ function ReviewDrawer({ id, close, mutate, revision, busy }: Pick<PageProps, "mu
       </>}
     </Modal>
     {confirmation && <Modal title="Confirm final approval" close={() => setConfirmation(undefined)}>
-      <p>Approve the exact prepared application for <strong>{confirmation.job.role}</strong> at <strong>{confirmation.job.company}</strong>. This queues work for the existing submission worker.</p>
+      <p>{confirmation.payload.provider === "mock" && <strong>Local simulation. </strong>}Approve the exact prepared application for <strong>{confirmation.job.role}</strong> at <strong>{confirmation.job.company}</strong>. This queues work for the existing submission worker.</p>
       <Details values={{ destination: confirmation.payload.destination, "resume version": confirmation.resume.id, "payload hash": confirmation.payload_hash }}/>
       <Button disabled={busy || !confirmation.payload_hash} onClick={async () => {
         const result = await mutate(appPath(id) + "/approve-submit", "POST",
@@ -169,14 +169,14 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
               </button>)}</div></section>;
           })}
         </div> : <>
-        <div className="table-wrap"><table className="data-table"><thead><tr><th>Role</th><th>Current status</th><th>Created</th><th>{mode === "exceptions" ? "Issue" : "Evidence"}</th>{mode === "exceptions" && <th>Retry</th>}</tr></thead>
+        <div className="table-wrap"><table className="data-table responsive-table" role="table"><thead><tr><th>Role</th><th>Current status</th><th>Created</th><th>{mode === "exceptions" ? "Issue" : "Evidence"}</th>{mode === "exceptions" && <th>Retry</th>}</tr></thead>
           <tbody>{rows.slice((currentPage - 1) * 25, currentPage * 25).map(({job, app}) => <tr key={job.id}>
             <td><button className="flat-button" onClick={() => app ? select("app", app.id) : select("job", job.id)}><Company job={job}/></button></td>
-            <td><Status value={app?.review_status ?? job.automation.state ?? job.status}/></td>
-            <td>{date(app?.created ?? job.created)}</td>
-            <td>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.reason || label(app?.review_status ?? job.automation.state)
+            <td data-label="Current status"><Status value={app?.review_status ?? job.automation.state ?? job.status}/></td>
+            <td data-label="Created">{date(app?.created ?? job.created)}</td>
+            <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.reason || label(app?.review_status ?? job.automation.state)
               : app ? evidence(app) : "—"}</td>
-            {mode === "exceptions" && <td>{isJobException(job) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>}</td>}
+            {mode === "exceptions" && <td data-label="Retry">{isJobException(job) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>}</td>}
           </tr>)}</tbody></table></div>
         {pages > 1 && <div className="pagination"><span>Page {currentPage} of {pages}</span><Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</Button>
           <Button size="sm" variant="outline" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Next</Button></div>}
