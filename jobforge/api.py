@@ -19,7 +19,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import activation, employers, greenhouse, submission
+from . import activation, activation_evidence, employers, greenhouse, submission
 from .applications import answers_digest, expected_pdf, prepare, reconcile, record, still_verified, submit_simulation
 from .config import ACCESS_TOKEN, MAX_UPLOAD, ROOT
 from .intelligence import application_readiness, feedback_for, semantic_cache_key
@@ -277,7 +277,7 @@ def refresh_profile_matches(db, row):
 
 
 class FactBatch(BaseModel):
-    facts: list[Fact] = Field(min_length=1, max_length=220)
+    facts: list[Fact] = Field(min_length=1, max_length=250)
 
 
 @app.post("/api/profile/verify", dependencies=AUTH)
@@ -320,6 +320,66 @@ def activation_preferences(payload: ActivationPreferences):
         return {"preferences_saved": True}
 
 
+class PersonalActivation(BaseModel):
+    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    fact_ids: list[str] = Field(default_factory=list, max_length=250)
+    preferences: ActivationPreferences
+    maximum_mandatory_years: int | None = Field(default=None, ge=0, le=30)
+    board_keys: list[str] = Field(min_length=1, max_length=10)
+
+
+@app.get("/api/activation/review", dependencies=AUTH)
+def personal_activation_review():
+    with Session() as db:
+        return activation_evidence.review(db, db.get(Profile, 1))[0]
+
+
+@app.post("/api/activation/confirm", status_code=202, dependencies=AUTH)
+def confirm_personal_activation(payload: PersonalActivation):
+    with Session.begin() as db:
+        settings = lock_settings(db)
+        if db.scalar(select(Run.id).where(Run.status.in_(ACTIVE)).limit(1)):
+            raise HTTPException(409, "A run is already pending. Wait for the worker to finish.")
+        if not settings.options.get("enabled"):
+            raise ValueError("Resume the hourly schedule in Automation before activating.")
+        row = db.get(Profile, 1)
+        review, records = activation_evidence.review(db, row)
+        if payload.revision != review["revision"]:
+            raise HTTPException(409, "The profile or originals changed. Refresh the activation review.")
+        chosen = set(payload.fact_ids)
+        if len(chosen) != len(payload.fact_ids):
+            raise ValueError("Select each fact once.")
+        items = {item["id"]: item for item in review["groups"]}
+        if any(identity not in items or items[identity]["verified"] or not items[identity]["evidence"]
+               for identity in chosen):
+            raise HTTPException(409, "A selected fact is no longer available for verification.")
+        conflicts = {items[identity]["conflict"] for identity in chosen} - {None}
+        if any(sum(item["conflict"] == conflict and (item["verified"] or item["id"] in chosen)
+                   for item in items.values()) > 1 for conflict in conflicts):
+            raise ValueError("Resolve the conflicting credential or link before confirming.")
+        existing = {fact["id"] for fact in row.facts}
+        added = [{**records[identity], "verified": True} for identity in payload.fact_ids if identity not in existing]
+        if len(row.facts) + len(added) > 250:
+            raise ValueError("Remove stale draft facts in Profile before adding more evidence.")
+        row.facts = [{**fact, "verified": True} if fact["id"] in chosen else fact for fact in row.facts] + added
+        updated = {**row.preferences, **payload.preferences.model_dump()}
+        updated["activation_confirmed"] = True
+        if "maximum_mandatory_years" in payload.model_fields_set:
+            updated["maximum_mandatory_years"] = payload.maximum_mandatory_years
+        row.preferences = Preferences.model_validate(updated).model_dump()
+        identities = enable_verified_boards(db, settings, EmployerBatch(keys=payload.board_keys).unique())
+        refresh_profile_matches(db, row)
+        setup, sources = activation.plan(db, settings)
+        if not setup["ready"]:
+            raise ValueError("Complete activation before running: " + ", ".join(
+                label for label, ready in setup["checks"].items() if not ready) + ".")
+        if not identities.issubset({(source.provider, source.board.casefold()) for source in sources}):
+            raise ValueError("Verify every selected board before running.")
+        run = queue(db, "activation")
+        run.report = {"activation_boards": sorted(identities)}
+        return {"id": run.id, "status": run.status}
+
+
 @app.get("/api/activation", dependencies=AUTH)
 def activation_status():
     with Session() as db:
@@ -352,8 +412,8 @@ def upload(file: UploadFile = File()):
         if already:
             return {"imported": 0, "upload": already, "already_imported": True}
         row = db.get(Profile, 1)
-        if len(row.facts) + len(facts) > 220:
-            raise ValueError("Profile holds up to 220 facts. Remove stale drafts before importing.")
+        if len(row.facts) + len(facts) > 250:
+            raise ValueError("Profile holds up to 250 facts. Remove stale drafts before importing.")
         original = Upload(name=name, blob=data)
         db.add(original)
         db.flush()
@@ -419,15 +479,22 @@ def enable_employer_batch(request: EmployerBatch):
     keys = request.unique()
     with Session.begin() as db:
         settings = lock_settings(db)
-        preferences = Preferences.model_validate(db.get(Profile, 1).preferences)
-        priorities = {name.casefold() for name in preferences.priority_companies}
-        excluded = {name.casefold() for name in preferences.excluded_companies}
-        for key in keys:
-            source = employers.catalog_source(key)
-            company = source.company.casefold()
-            group = "excluded" if company in excluded else "priority" if company in priorities else "regular"
-            employers.update_monitor(db, settings, key, True, group)
+        enable_verified_boards(db, settings, keys)
     return {"enabled": len(keys)}
+
+
+def enable_verified_boards(db, settings, keys):
+    identities = set()
+    preferences = Preferences.model_validate(db.get(Profile, 1).preferences)
+    priorities = {name.casefold() for name in preferences.priority_companies}
+    excluded = {name.casefold() for name in preferences.excluded_companies}
+    for key in keys:
+        source = employers.catalog_source(key)
+        identities.add((source.provider, source.board.casefold()))
+        company = source.company.casefold()
+        group = "excluded" if company in excluded else "priority" if company in priorities else "regular"
+        employers.update_monitor(db, settings, key, True, group)
+    return identities
 
 
 @app.get("/api/employers", dependencies=AUTH)

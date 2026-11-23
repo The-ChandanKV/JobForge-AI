@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from httpx import HTTPError
 
-from . import activation
+from . import activation, employers
 from .applications import prepare, reconcile, still_verified
 from .intelligence import priority_score, ranking_feedback, semantic_cache_key
 from .llm import model_status, semantic_relevance
@@ -196,10 +196,14 @@ def pipeline(run_id, lost):
     if initial and not active_sources:
         result["errors"].append("No verified employer boards from the queued activation are enabled.")
         return result
+    career_sites = {(item[1], item[2].casefold()): item[-1] for item in employers.CATALOG.values()}
+    confirmed_jobs = set()
     for source in active_sources:
         if canceled(run_id, lost):
             return result
         source_identity = f"{source.provider}/{source.board}"
+        careers = career_sites.get((source.provider, source.board.casefold()), "")
+        check_official = initial or (preferences.activation_confirmed and bool(careers))
         try:
             jobs, complete = fetch_board(source)
             result["sources"][source_identity] = {"status": "complete" if complete else "partial",
@@ -210,8 +214,13 @@ def pipeline(run_id, lost):
                 ))}
                 seen = set()
                 for posting in jobs:
-                    seen.add(posting.source_key)
                     result["scanned"] += 1
+                    if check_official and (not posting.description.strip()
+                                           or not employers.belongs_to_employer(source, careers, posting.url)
+                                           or not employers.belongs_to_employer(source, careers, posting.apply_url or posting.url)):
+                        result["filtered"] += 1
+                        continue
+                    seen.add(posting.source_key)
                     if posting.source_key not in existing and (
                         not shortlist(posting, preferences)
                         or analyze(posting, profile.facts, preferences, options.min_match_score)["eligibility"] == "INELIGIBLE"
@@ -223,6 +232,8 @@ def pipeline(run_id, lost):
                     unchanged = bool(prior and posting.source_key == prior.source_key and
                                      prior.detail == posting.model_dump(mode="json", exclude={"original_description"}))
                     saved = save_job(db, posting)
+                    if initial and saved.detail.get("source_key") == posting.source_key:
+                        confirmed_jobs.add(saved.id)
                     if unchanged:
                         result["unchanged"] += 1
                         if saved.match:
@@ -264,6 +275,10 @@ def pipeline(run_id, lost):
         active_boards = {(source.provider, source.board.casefold()) for source in active_sources}
         discovered = {alias.job_id for alias in db.scalars(select(JobSource).where(JobSource.available))
                       if tuple(alias.key.split(":", 2)[:2]) in active_boards}
+        if initial:
+            discovered &= confirmed_jobs
+            result["eligible"] = sum(job.match.get("eligibility") == "ELIGIBLE" for job in db.scalars(
+                select(Job).where(Job.id.in_(discovered))))
         prepared_today = db.scalar(select(func.count()).select_from(Application).where(
             Application.created >= day_start(options.timezone)
         ))

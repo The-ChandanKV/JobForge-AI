@@ -1,5 +1,14 @@
 # Test report
 
+## Phase 8 personal activation
+
+- The Windows backend suite passed 56 tests with the existing Starlette test-client deprecation warning. The five focused activation tests, three frontend tests, lint, TypeScript, and the production build passed.
+- The installed Activation screen showed 105 draft fact groups across two saved originals, including source-backed CGPA, graduation year, GitHub, and LinkedIn. The browser check opened the two CGPA excerpts and selected a draft fact and a board without submitting the form.
+- All seven saved employer previews were available. The stored samples had no role and location matches for the proposed draft, and the screen uses directory coverage as a secondary ranking signal. Older samples lack posting dates and experience data. No additional public feed discovery was needed for this review.
+- The isolated confirmation tests cover grouped duplicates, conflicting values, stale review rejection, rollback on an invalid board, preservation of existing verified facts and salary, and explicit Remote selection. The synthetic preparation run rejected an unrelated ATS board and compiled five real PDFs for fictional jobs. It saved five preparation records and produced zero submission receipts.
+- The installed SQLite database and a fresh migration both reported revision 0004. The dashboard returned HTTP 200. One Windows worker process tree advanced its heartbeat, Ollama reported the configured model available, and Tectonic was installed. The worker remained on the 60-minute schedule in dry-run mode. Desktop notifications were enabled, approval email was unset, and the live smoke test generated no notification.
+- Live profile readiness still requires career verification. No search preferences or employer monitoring were activated. Jobs ingested, eligible matches, generated resumes, validated PDFs, applications awaiting approval, and submissions were each zero at verification.
+
 ## Phase 7 real-world activation
 
 The baseline passed all **51 pytest tests**. The final full Windows suite passed **54 tests**, with the existing Starlette test-client deprecation warning. The three frontend tests, lint, TypeScript, Vite production build, and Playwright flows passed. A fresh temporary SQLite database migrated through 0004 without outstanding schema operations.

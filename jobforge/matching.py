@@ -24,6 +24,7 @@ YEARS = re.compile(
 )
 REQUIREMENT_LABEL = re.compile(
     r"(?i)^(required(?: skills| qualifications)?|minimum qualifications|must have|mandatory skills|"
+    r"(?:basic )?qualifications|requirements|what you(?:'ll| will) need|"
     r"preferred(?: skills| qualifications)?|nice to have|bonus points)\s*(?::\s*(.*)|$)"
 )
 
@@ -81,6 +82,10 @@ def contains(text, value):
     return bool(re.search(r"(?<!\w)" + re.escape(value.casefold()) + r"(?!\w)", text.casefold()))
 
 
+def is_remote(posting):
+    return posting.work_mode == "remote" or (not posting.work_mode and contains(posting.location, "remote"))
+
+
 def profile_values(facts, category):
     return [f["value"] for f in facts if f["verified"] and f["category"] == category]
 
@@ -113,6 +118,8 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     groups = list(dict.fromkeys(alternatives.values()))
     unmet_groups = [group for group in groups if not set(group).intersection(matching)]
     fail, review = [], []
+    if preferences.activation_confirmed and not required_lines:
+        review.append("Confirm the employer's mandatory requirements from the full posting.")
     if expired(posting.deadline):
         fail.append("The employer's application deadline has passed.")
     if missing:
@@ -145,6 +152,10 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     eligibility_text = "\n".join([*required_lines, *requirements["uncertain"]])
     authorization = re.search(r"(?i)\b(?:authorized|authorised|right) to work in ([^.;\n,]+)", eligibility_text)
     verified_locations = profile_field(facts, "Authorized work locations", "authorization") or ""
+    if preferences.activation_confirmed and is_remote(posting):
+        remote_scope = re.sub(r"(?i)\bremote\b", "", posting.location).strip(" -–—,()/")
+        if remote_scope and fold(remote_scope) not in {fold(location) for location in verified_locations.split(",")}:
+            review.append("Verify eligibility for the remote posting's listed location.")
     auth_matches = authorization and fold(authorization[1]) in {fold(location) for location in verified_locations.split(",")}
     if re.search(r"(?i)\b(work authori[sz]ation|no sponsorship|visa sponsorship|citizen(?:ship)?|right to work|authori[sz]ed to work)\b",
                  eligibility_text) and (not auth_matches or re.search(r"(?i)\b(sponsorship|citizen)", eligibility_text)):
@@ -227,9 +238,18 @@ def shortlist(posting, preferences):
             or (preferences.minimum_mandatory_years is not None and years < preferences.minimum_mandatory_years)
         ):
             return False
-    if preferences.locations and not any_match(posting.location, preferences.locations):
+    modes = preferences.work_modes
+    remote_allowed = "remote" in modes
+    approved_remote = False
+    if preferences.activation_confirmed:
+        remote = is_remote(posting)
+        if (remote and not remote_allowed) or (not remote and remote_allowed and not preferences.locations):
+            return False
+        approved_remote = remote and remote_allowed
+        modes = [mode for mode in modes if mode != "remote"]
+    if preferences.locations and not approved_remote and not any_match(posting.location, preferences.locations):
         return False
-    if preferences.work_modes and posting.work_mode not in preferences.work_modes:
+    if modes and not approved_remote and posting.work_mode not in modes:
         return False
     if preferences.levels and not any_match(posting.role + " " + posting.description, preferences.levels):
         return False

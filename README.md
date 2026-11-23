@@ -2,7 +2,7 @@
 
 ## Activate a personal search
 
-Open [Activation](http://127.0.0.1:8000/activation) to review original resume evidence, save your own preferences, and choose verified boards. [Activation guide](docs/PHASE_7_ACTIVATION.md) · [Preparation workflow](docs/REAL_APPLICATION_PREPARATION.md)
+Open Activation to review original resume evidence, edit your preferences, and choose verified boards. One confirmation saves your choices and queues the first dry run. [Activation](http://127.0.0.1:8000/activation) · [Activation guide](docs/PHASE_7_ACTIVATION.md) · [Preparation workflow](docs/REAL_APPLICATION_PREPARATION.md)
 
 
 ## Intelligent job discovery

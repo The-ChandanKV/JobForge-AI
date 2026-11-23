@@ -25,11 +25,11 @@ def readiness(facts):
     return {"ready": all(checks.values()), "checks": checks}
 
 
-def parse_file(name, data):
-    return candidates(extract_text(name, data))
+def parse_file(name, data, *, activation_review=False):
+    return candidates(extract_text(name, data, include_pdf_links=activation_review), date_ranges=activation_review)
 
 
-def extract_text(name, data):
+def extract_text(name, data, *, include_pdf_links=False):
     suffix = Path(name).suffix.lower()
     if not data or len(data) > MAX_UPLOAD:
         raise ValueError("Provide a non-empty file under 4 MB.")
@@ -38,7 +38,10 @@ def extract_text(name, data):
             file = Path(tmp) / "resume.pdf"
             file.write_bytes(data)
             try:
-                result = subprocess.run([sys.executable, "-I", str(ROOT / "pdf_worker.py"), str(file)],
+                command = [sys.executable, "-I", str(ROOT / "pdf_worker.py"), str(file)]
+                if include_pdf_links:
+                    command.append("--contact-links")
+                result = subprocess.run(command,
                                         cwd=tmp, capture_output=True, timeout=15, check=True)
                 text = result.stdout.decode()
             except (OSError, subprocess.SubprocessError) as exc:
@@ -64,7 +67,7 @@ def extract_text(name, data):
     return text[:100_000]
 
 
-def candidates(text, source="text"):
+def candidates(text, source="text", *, date_ranges=False):
     facts = []
     section = "other"
     seen = set()
@@ -85,6 +88,8 @@ def candidates(text, source="text"):
         if heading == "education":
             cgpa = re.search(r"(?i)\b(?:CGPA|GPA)\s*[:=]?\s*(\d{1,2}(?:\.\d+)?(?:\s*/\s*\d{1,2}(?:\.\d+)?)?)", value)
             graduation = re.search(r"(?i)\b(?:graduation(?: year)?|graduat(?:ed|ing)(?: in)?|expected)\s*[:=]?\s*(20\d{2})\b", value)
+            if not graduation and cgpa and date_ranges:
+                graduation = re.search(r"\b20\d{2}\s*[-–—−\ufffd]\s*(20\d{2})\b", value)
             for title, match in (("CGPA", cgpa), ("Graduation year", graduation)):
                 if match and (title, match[1]) not in seen:
                     seen.add((title, match[1]))

@@ -117,7 +117,7 @@ export function ProfilePage(props: PageProps) {
           <label>Search facts<input type="search" value={query} onChange={event => setQuery(event.target.value)}/></label>
           <label>Source<select value={scope ?? ""} onChange={event => setScope(event.target.value)}><option value="">All sources</option>{sources.map(source => <option key={source}>{source}</option>)}</select></label>
           <label className="check"><input type="checkbox" checked={unverified} onChange={event => setUnverified(event.target.checked)}/> Unverified only</label>
-          <Button type="button" variant="outline" disabled={current.facts.length >= 220} onClick={() => {
+          <Button type="button" variant="outline" disabled={current.facts.length >= 250} onClick={() => {
             const id = crypto.randomUUID().replaceAll("-", "");
             setDraft({...current, facts: [{id, category:"other", label:"", value:"", verified:false, source:"manual", excerpt:""}, ...current.facts]});
             setQuery(""); setScope(undefined); setEditing(id);

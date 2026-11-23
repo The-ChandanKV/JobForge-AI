@@ -35,6 +35,7 @@ class Preferences(BaseModel):
     roles: list[str] = Field(default_factory=list, max_length=40)
     locations: list[str] = Field(default_factory=list, max_length=40)
     work_modes: list[Literal["remote", "hybrid", "onsite"]] = []
+    activation_confirmed: bool = False
     employment: list[str] = []
     levels: list[str] = []
     excluded_keywords: list[str] = []
@@ -54,7 +55,7 @@ class Preferences(BaseModel):
 
 
 class ProfileInput(BaseModel):
-    facts: list[Fact] = Field(default_factory=list, max_length=220)
+    facts: list[Fact] = Field(default_factory=list, max_length=250)
     preferences: Preferences = Field(default_factory=Preferences)
 
     @field_validator("facts")

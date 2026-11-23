@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy import select
 
+from .matching import minimum_years, requirement_lines
 from .models import Log, Profile
 from .providers import API, fetch_board, fold
 from .schemas import Options, Preferences, Source
@@ -102,7 +103,10 @@ def verify_catalog_source(db_session, key):
         raise ValueError("This feed did not return a public posting tied to the expected employer.")
     endpoint = API[source.provider].format(board=source.board)
     preview = {"complete": complete, "listing_count": len(matching), "endpoint": endpoint,
-               "jobs": [{"role": row.role, "location": row.location, "url": str(row.url)} for row in matching[:8]]}
+               "jobs": [{"role": row.role, "location": row.location, "url": str(row.url),
+                         "work_mode": row.work_mode, "posted": row.posted,
+                         "required_years": minimum_years(requirement_lines(row.description), "required")}
+                        for row in matching[:8]]}
     with db_session.begin() as db:
         db.add(Log(kind="board_verified", message="Public employer board verified",
                    detail={"provider": source.provider, "board": source.board.casefold(),
