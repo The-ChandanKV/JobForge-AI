@@ -253,7 +253,7 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
             <td data-label="Current status"><Status value={app?.review_status ?? job.automation.state ?? job.status}/></td>
             {approvalQueue && <td data-label="Match">{job.match.match_score == null ? "—" : job.match.match_score + "%"}</td>}
             <td data-label="Created">{date(app?.created ?? job.created)}</td>
-            <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.reason || label(app?.review_status ?? job.automation.state)
+            <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.exception || app?.summary.reason || label(app?.review_status ?? job.automation.state)
               : app ? evidence(app) : "—"}</td>
             {mode === "exceptions" && <td data-label="Retry">{isJobException(job) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>}</td>}
           </tr>)}</tbody></table></div>

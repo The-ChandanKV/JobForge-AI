@@ -23,7 +23,8 @@ export function stage(job: Job, application?: Application): Stage {
 export const isJobException = (job: Job) => ["EXCEPTION", "RETRY_WAIT"].includes(job.automation.state ?? "");
 export const awaitsReview = (app: Application) => ["READY_FOR_REVIEW", "NEEDS_MANUAL_ACTION"].includes(app.review_status);
 export const isApplicationException = (app: Application) =>
-  ["NEEDS_MANUAL_ACTION", "FAILED", "SUBMISSION_UNCERTAIN", "SUBMISSION_FAILED", "SUBMISSION_BLOCKED"].includes(app.review_status);
+  ["NEEDS_MANUAL_ACTION", "FAILED", "SUBMISSION_UNCERTAIN", "SUBMISSION_FAILED", "SUBMISSION_BLOCKED"].includes(app.review_status)
+  || (awaitsReview(app) && Boolean(app.summary.exception));
 
 export function evidence(app: Application) {
   if (app.summary.simulation) return app.confirmation ? "Simulation receipt" : "Simulation";

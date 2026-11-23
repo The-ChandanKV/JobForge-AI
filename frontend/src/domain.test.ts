@@ -20,6 +20,9 @@ describe("persisted workflow", () => {
     expect(stage(job, uncertain)).toBe("Failed");
     expect(isApplicationException(uncertain)).toBe(true);
     expect(awaitsReview(uncertain)).toBe(false);
+    const manual = {...application, summary: {exception: "Manual employer handoff"}};
+    expect(isApplicationException(manual)).toBe(true);
+    expect(isApplicationException({...manual, review_status: "SUBMITTED"})).toBe(false);
   });
 
   it("distinguishes evidence by source", () => {

@@ -104,6 +104,8 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 expect(page.get_by_role("heading", name="Prepared application")).to_be_visible()
                 expect(page.get_by_role("button", name="Approve & submit")).to_have_count(0)
 
+                page.goto(origin + "/exceptions")
+                expect(page.get_by_text("This employer portal requires manual application.", exact=True)).to_be_visible()
                 options = page.request.get(origin + "/api/state").json()["options"]
                 options["sources"].append({"provider": "mock", "board": "fixture-textarea",
                                            "company": "Synthetic bulk employer", "enabled": True})
