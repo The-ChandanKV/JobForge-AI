@@ -235,7 +235,7 @@ def test_saved_policy_detects_changed_forms_but_cannot_enqueue_or_dispatch(local
         return httpx.Response(200, json=payload)
 
     original_client = httpx.Client
-    monkeypatch.setattr(applications.httpx, "Client", lambda **kwargs: original_client(
+    monkeypatch.setattr(submission.httpx, "Client", lambda **kwargs: original_client(
         **kwargs, transport=httpx.MockTransport(transport)
     ))
     with local_db.begin() as db:

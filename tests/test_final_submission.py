@@ -261,7 +261,7 @@ def test_greenhouse_uses_only_final_approval_and_verifies_mocked_response(db_ses
         return httpx.Response(200, json={"id": 123, "title": "Backend Engineer", "questions": questions})
 
     real_client = httpx.Client
-    monkeypatch.setattr(applications.httpx, "Client", lambda **kwargs: real_client(
+    monkeypatch.setattr(submission.httpx, "Client", lambda **kwargs: real_client(
         **kwargs, transport=httpx.MockTransport(transport)))
     with db_sessions.begin() as db:
         profile = db.get(Profile, 1)
