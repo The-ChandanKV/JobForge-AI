@@ -654,7 +654,11 @@ def add_job(payload: Intake):
 @app.get("/api/jobs/{job_id}", dependencies=AUTH)
 def job_detail(job_id: str):
     with Session() as db:
-        return job_item(required(db, Job, job_id))
+        job = job_item(required(db, Job, job_id))
+        logs = db.scalars(select(Log).where(Log.detail["job_id"].as_string() == job_id,
+                                          Log.kind.in_(["retry", "exception", "match", "resume"]))
+                          .order_by(Log.created.desc()).limit(10))
+        return {**job, "logs": [row_item(log, "id kind message created") for log in logs]}
 
 
 class RecommendationFeedback(BaseModel):

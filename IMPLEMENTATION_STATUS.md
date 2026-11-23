@@ -1,5 +1,9 @@
 # Implementation status
 
+## Phase 9
+
+The installed profile is ready and seven employer boards are enabled. Two controlled real discovery cycles completed. The saved job requires eligibility review, so there are zero live PDFs, application packages, or pending approvals. Bounded source concurrency, run timings, eligibility exceptions, and manual destination checks are deployed. Local Ollama and PDF generation passed isolated fixture tests. The 24-hour observation remains in progress. [Validation](docs/PHASE_9_VALIDATION.md)
+
 ## Phase 7
 
 Implemented batch resume evidence review, identical-upload reuse, saved activation preferences, verified bulk employer selection, and a crash-safe cap of five jobs for first real preparation. Live preparation awaits career verification and user choices. [Results](docs/TEST_REPORT.md)

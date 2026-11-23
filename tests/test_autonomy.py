@@ -118,6 +118,8 @@ def test_feed_failure_and_bounded_resume_retry(local_db, monkeypatch):
             db.get(Run, run.id).status = "COMPLETED"
     assert len(calls) == 2
     assert any("ConnectError" in error for error in report["errors"])
+    assert report["timings"]["discovery"]["count"] == 1
+    assert report["timings"]["matching"]["count"] > 0
     with local_db() as db:
         assert db.scalar(select(Job)).automation["state"] == "EXCEPTION"
         assert db.scalar(select(Log).where(Log.kind == "exception"))

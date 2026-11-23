@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { appPath, jobPath, officialUrl, resumeUrl } from "../api";
 import type { Application, Event, Job, Review } from "../api";
-import { date, evidence, isApplicationException, isJobException, label, searchMatch, stage, stages } from "../domain";
+import { date, evidence, isApplicationException, isJobException, label, needsEligibilityReview, searchMatch, stage, stages } from "../domain";
 import { Details, Empty, ErrorNotice, Heading, Loading, Modal, Panel, Status, useResource } from "../shared";
 import type { PageProps } from "../shared";
 import { JobDrawer, MatchDetails } from "./jobs";
@@ -261,7 +261,7 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
   const rows = state.jobs.map(job => ({job, app: applications.get(job.id)})).filter(({job, app}) => {
     if (approvalQueue && (!app || !matchesQueue(app, queueFilter, canDispatch(app)))) return false;
     if (mode === "history" && !app) return false;
-    if (mode === "exceptions" && !isJobException(job) && (!app || !isApplicationException(app))) return false;
+    if (mode === "exceptions" && !isJobException(job) && !needsEligibilityReview(job) && (!app || !isApplicationException(app))) return false;
     if (params.get("evidence") === "verified" && (!app || evidence(app) !== "Provider verification")) return false;
     const day = (app?.created ?? job.created).slice(0, 10);
     return (!status || stage(job, app) === status) && (!start || day >= start) && (!end || day <= end) &&
@@ -313,15 +313,18 @@ export function Pipeline({ mode, ...props }: PageProps & { mode: keyof typeof co
               </button>)}</div></section>;
           })}
         </div> : <>
-        <div className="table-wrap"><table className="data-table responsive-table" role="table"><thead><tr><th>Role</th><th>Current status</th>{approvalQueue && <th>Match</th>}<th>Created</th><th>{mode === "exceptions" ? "Issue" : "Evidence"}</th>{mode === "exceptions" && <th>Retry</th>}</tr></thead>
+        <div className="table-wrap"><table className="data-table responsive-table" role="table"><thead><tr><th>Role</th><th>Current status</th>{approvalQueue && <th>Match</th>}<th>Created</th><th>{mode === "exceptions" ? "Issue" : "Evidence"}</th>{mode === "exceptions" && <th>Resolution</th>}</tr></thead>
           <tbody>{rows.slice((currentPage - 1) * 25, currentPage * 25).map(({job, app}) => <tr key={job.id}>
             <td><button className="flat-button" onClick={() => app ? select("app", app.id) : select("job", job.id)}><Company job={job}/></button></td>
             <td data-label="Current status"><Status value={app?.review_status ?? job.automation.state ?? job.status}/></td>
             {approvalQueue && <td data-label="Match">{job.match.match_score == null ? "—" : job.match.match_score + "%"}</td>}
             <td data-label="Created">{date(app?.created ?? job.created)}{queueSort === "expiring" && job.available && Date.parse(job.deadline ?? "") > Date.now() && <small className="row-note">Deadline {date(job.deadline)}</small>}</td>
-            <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.exception || app?.summary.reason || label(app?.review_status ?? job.automation.state)
+            <td data-label={mode === "exceptions" ? "Issue" : "Evidence"}>{mode === "exceptions" ? app?.summary.missing?.join(", ") || job.automation.reason || app?.summary.exception || app?.summary.reason ||
+              (needsEligibilityReview(job) ? job.match.concerns?.[0] ?? "Eligibility requires review" : label(app?.review_status ?? job.automation.state))
               : app ? evidence(app) : "—"}</td>
-            {mode === "exceptions" && <td data-label="Retry">{isJobException(job) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>}</td>}
+            {mode === "exceptions" && <td data-label="Resolution">{isJobException(job) ? <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate(jobPath(job.id) + "/retry", "POST", undefined, "Internal retry budget reset.")}>Retry preparation</Button>
+              : needsEligibilityReview(job) ? <Link className="text-link" to={"/intelligence?job=" + job.id}>Review requirements</Link>
+              : app ? <button type="button" className="flat-button" onClick={() => select("app", app.id)}>Review resolution</button> : null}</td>}
           </tr>)}</tbody></table></div>
         {pages > 1 && <div className="pagination"><span>Page {currentPage} of {pages}</span><Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</Button>
           <Button size="sm" variant="outline" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Next</Button></div>}

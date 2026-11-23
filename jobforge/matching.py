@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from .providers import fold
 from .schemas import Posting, Preferences
 
+MATCH_RULES_VERSION = 2
+
 SKILLS = ("Python", "SQL", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust", "FastAPI",
           "React", "Node.js", "Django", "Flask", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Docker",
           "Kubernetes", "AWS", "Azure", "GCP", "PyTorch", "TensorFlow", "Git", "Linux", "Kafka", "GraphQL",
@@ -140,6 +142,9 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
         available = profile_field(facts, "Years of experience")
         if not available or not re.fullmatch(r"\d{1,2}(?:\.\d+)?", available) or float(available) < uncertain_years:
             review.append("Check whether the stated experience requirement is mandatory.")
+    if preferences.activation_confirmed and years is None and re.search(
+            r"(?im)^\s*minimum years of experience\s*:", desc):
+        review.append("Confirm the employer's minimum experience requirement.")
     graduation = re.search(r"(?i)\bgraduat\w*\s+(?:(?:in|by|after|before)\s+)?\b(20\d{2})\b",
                            "\n".join([*required_lines, *requirements["uncertain"]]))
     if graduation:
@@ -200,6 +205,7 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     eligibility = "INELIGIBLE" if fail else "NEEDS_REVIEW" if review else "ELIGIBLE"
     recommendation = "PREPARE_APPLICATION" if eligibility == "ELIGIBLE" and score >= threshold else "REVIEW"
     return {
+        "rules_version": MATCH_RULES_VERSION,
         "eligibility": eligibility, "match_score": score, "components": components, "matching_skills": matching,
         "alternative_skill_groups": [list(group) for group in groups],
         "required_skills": required, "missing_skills": missing, "preferred_skills": preferred,
@@ -276,9 +282,9 @@ def shortlist(posting, preferences):
     return True
 
 
-def evaluate_saved_job(job, facts, preferences, threshold):
+def evaluate_saved_job(job, facts, preferences, threshold, *, evaluated=None):
     cached = job.match.get("semantic") if job.match else None
-    job.match = analyze(Posting.model_validate(job.detail), facts, preferences, threshold)
+    job.match = evaluated if evaluated is not None else analyze(Posting.model_validate(job.detail), facts, preferences, threshold)
     if cached:
         job.match = {**job.match, "semantic": cached}
     if job.status in {"DISCOVERED", "SHORTLISTED", "NEEDS_REVIEW"}:

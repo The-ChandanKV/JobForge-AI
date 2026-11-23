@@ -86,6 +86,8 @@ def application_readiness(job, profile, resume=None, application=None, can_dispa
     }
     if already_applied:
         category = "ALREADY_APPLIED"
+    elif application and application.summary.get("unsupported_destination"):
+        category = "UNSUPPORTED"
     elif canonical in {"FAILED", "SUBMISSION_UNCERTAIN"}:
         category = "FAILED_PREPARATION" if canonical == "FAILED" else "NEEDS_INFORMATION"
     elif missing or not all(checks[key] for key in

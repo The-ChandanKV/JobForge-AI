@@ -74,6 +74,7 @@ export interface Job {
   verified: string;
   match: Match;
   automation: { state?: string; attempts?: number; next_retry?: string; reason?: string; stage?: string };
+  logs?: { id: string; kind: string; message: string; created: string }[];
 }
 
 export interface Application {
@@ -117,7 +118,13 @@ export interface Run {
   canceled: boolean;
   attempts: number;
   created: string;
-  report: { scanned?: number; filtered?: number; unchanged?: number; sources?: Record<string, {status: string; listings?: number; checked_at: string; error?: string}>; discovered?: number; compiled?: number; prepared?: number; error?: string };
+  report: {
+    scanned?: number; filtered?: number; unchanged?: number; discovered?: number; eligible?: number; shortlisted?: number;
+    needs_review?: number; resume_reused?: number; compiled?: number; prepared?: number; error?: string;
+    sources?: Record<string, {status: string; listings?: number; checked_at: string; error?: string; seconds?: number}>;
+    timings?: Record<string, {seconds: number; count: number}>;
+    database?: {seconds: number; statements: number};
+  };
 }
 
 export interface State {

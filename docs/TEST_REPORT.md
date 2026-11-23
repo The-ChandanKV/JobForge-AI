@@ -1,5 +1,12 @@
 # Test report
 
+## Phase 9 workflow validation
+
+- Windows pytest passed **56 tests** with the existing Starlette test-client warning. This included both Playwright suites, real Ollama against synthetic facts, scheduler crash and lease recovery, source failure and bounded retry, interrupted preparation with PDF reuse, and exact approval and stale-payload safeguards.
+- Frontend lint, three Vitest tests, TypeScript and the Vite production build passed. An isolated Chrome session confirmed authenticated PDF access, no-store headers, an official-link manual handoff, application tracking, notifications, and simulated approval. The installed nine-route smoke test checked the live eligibility exception and run measurements.
+- A fresh SQLite database migrated to 0004 and Alembic reported no pending operations. The installed database was also at 0004. The dashboard listened on loopback, the single Windows worker process tree advanced its heartbeat, Ollama was available, and Tectonic 0.17.0 compiled the fixture PDF.
+- Two controlled public-board cycles completed with zero eligible matches, zero live PDFs or application packages, and zero submissions. Existing Windows shell events showed desktop notifications had been displayed. Live application-ready delivery remains unobserved because no live application reached review. [Phase 9 validation](PHASE_9_VALIDATION.md)
+
 ## Phase 8 personal activation
 
 - The Windows backend suite passed 56 tests with the existing Starlette test-client deprecation warning. The five focused activation tests, three frontend tests, lint, TypeScript, and the production build passed.

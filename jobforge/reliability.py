@@ -1,9 +1,13 @@
 """Report actual scheduler observations from durable runs and worker events."""
 import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 from statistics import mean
+from time import perf_counter
 
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.engine import Engine
 
 from .models import Log, Run, Session, Settings, WorkerLock
 from .schemas import Options
@@ -24,6 +28,35 @@ def anchor_worker(db, settings):
 
 def timestamp(value):
     return datetime.fromisoformat(value) if value else None
+
+
+SQL_OBSERVATION = ContextVar("jobforge_sql_observation", default=None)
+
+
+@event.listens_for(Engine, "before_cursor_execute")
+def start_sql_observation(_connection, _cursor, _statement, _parameters, context, _many):
+    totals = SQL_OBSERVATION.get()
+    if totals is not None:
+        context.jobforge_started = perf_counter()
+        totals["statements"] += 1
+
+
+@event.listens_for(Engine, "after_cursor_execute")
+def finish_sql_observation(_connection, _cursor, _statement, _parameters, context, _many):
+    started = getattr(context, "jobforge_started", None)
+    if started is not None:
+        SQL_OBSERVATION.get()["seconds"] += perf_counter() - started
+
+
+@contextmanager
+def observe_sql():
+    totals = {"statements": 0, "seconds": 0.0}
+    token = SQL_OBSERVATION.set(totals)
+    try:
+        yield totals
+    finally:
+        SQL_OBSERVATION.reset(token)
+        totals["seconds"] = round(totals["seconds"], 4)
 
 
 def report(at=None):

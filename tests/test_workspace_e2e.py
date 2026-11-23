@@ -76,6 +76,7 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 page.get_by_role("button", name="Add posting").click()
                 page.get_by_label("Company", exact=True).last.fill("Example Studio")
                 page.get_by_label("Role", exact=True).last.fill("API Developer")
+                page.get_by_label("Posting URL").fill("https://example.test/jobs/api-developer")
                 page.get_by_label("Job description").fill("Required skills: Python, FastAPI.")
                 page.get_by_role("button", name="Save posting").click()
                 drawer = page.get_by_role("dialog", name="Job details")
@@ -92,7 +93,12 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 page.get_by_role("button", name="Generate resume").click()
                 preview = page.locator('iframe[title="Tailored resume PDF"]')
                 expect(preview).to_be_visible(timeout=45000)
-                assert page.request.get(origin + preview.get_attribute("src")).body().startswith(b"%PDF-")
+                pdf_url = origin + preview.get_attribute("src")
+                pdf = page.request.get(pdf_url)
+                assert pdf.body().startswith(b"%PDF-") and pdf.headers["cache-control"] == "no-store"
+                guest = pw.request.new_context()
+                assert guest.get(pdf_url).status == 401
+                guest.dispose()
                 with page.expect_download() as download:
                     page.get_by_role("link", name="Download PDF", exact=True).click()
                 assert download.value.suggested_filename == "resume.pdf"
@@ -105,6 +111,8 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 expect(page.get_by_role("heading", name="Prepared application")).to_be_visible()
                 expect(page.get_by_role("button", name="Copy email")).to_be_visible()
                 expect(page.get_by_role("link", name="Find similar roles")).to_be_visible()
+                expect(page.get_by_role("link", name="Review & open application")).to_have_attribute(
+                    "href", "https://example.test/jobs/api-developer")
                 expect(page.get_by_role("button", name="Approve & submit")).to_have_count(0)
 
                 page.goto(origin + "/exceptions")

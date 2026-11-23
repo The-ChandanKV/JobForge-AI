@@ -6,6 +6,7 @@ import subprocess
 import unicodedata
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import perf_counter
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pypdf import PdfReader
@@ -28,6 +29,10 @@ CONTACT = {"email", "phone", "city", "country", "linkedin", "github", "portfolio
 LAYOUT = re.compile(r"(?m)^(\\geometry\{margin=)(?:0\.[4-9]\d?|1(?:\.[0-2]\d?)?)in(\})$")
 TEMPLATES = Environment(loader=FileSystemLoader(ROOT / "templates"), undefined=StrictUndefined,
                         autoescape=False, keep_trailing_newline=True)
+
+
+class ResumeValidationError(ValueError):
+    """A resume or compiler setup that must change before another attempt."""
 
 
 def escape_latex(value):
@@ -112,25 +117,25 @@ def compile_pdf(tex, expected, bootstrap=False):
                                        errors="replace", timeout=70, check=False,
                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except FileNotFoundError as exc:
-            raise ValueError("Tectonic is missing. Install it and run the compiler bootstrap.") from exc
+            raise ResumeValidationError("Tectonic is missing. Install it and run the compiler bootstrap.") from exc
         except subprocess.TimeoutExpired as exc:
             raise ValueError("Tectonic compilation exceeded 70 seconds.") from exc
         document = work / "resume.pdf"
         if completed.returncode or not document.is_file():
             raise ValueError("Compilation failed. Run the compiler bootstrap if the cache is missing.")
         if document.stat().st_size > 5_000_000:
-            raise ValueError("PDF exceeds 5 MB.")
+            raise ResumeValidationError("PDF exceeds 5 MB.")
         reader = PdfReader(document)
         page_count = len(reader.pages)
         if not 1 <= page_count <= 5:
-            raise ValueError("Resume PDF must contain between one and five pages.")
+            raise ResumeValidationError("Resume PDF must contain between one and five pages.")
         extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
         normalized = word_key(extracted)
         if not normalized:
-            raise ValueError("Generated PDF contains no extractable text.")
+            raise ResumeValidationError("Generated PDF contains no extractable text.")
         missing = [f["id"] for f in expected if word_key(f["value"]) and word_key(f["value"]) not in normalized]
         if missing:
-            raise ValueError("The PDF lost or altered verified text. Review facts " + ", ".join(missing[:6]))
+            raise ResumeValidationError("The PDF lost or altered verified text. Review facts " + ", ".join(missing[:6]))
         warnings = []
         if page_count > 1:
             warnings.append(f"Resume spans {page_count} pages.")
@@ -166,7 +171,9 @@ def generate(db, job, facts, options, request):
     jd = job.detail["description"]
     keywords = job.match.get("matching_skills", [])
     candidates.sort(key=lambda f: -sum(contains(f["value"], word) for word in keywords))
+    started = perf_counter()
     chosen, meta = select_facts(options, jd, candidates, request.instructions)
+    selection_seconds = round(perf_counter() - started, 4)
     meta = {**meta, "ranked_fact_ids": chosen or []}
     order = {identity: index for index, identity in enumerate(chosen or [])}
     ranked = sorted(candidates, key=lambda f: (-sum(has_skill(f["value"], skill) for skill in keywords),
@@ -192,12 +199,15 @@ def generate(db, job, facts, options, request):
     if not candidates:
         raise ValueError("Verify at least one education, experience, skill, or project fact.")
     tex = TEMPLATES.get_template(request.template + ".tex").render(name=name, contact=contact, sections=sections)
+    started = perf_counter()
     pdf, checks = compile_pdf(tex, rendered)
+    compile_seconds = round(perf_counter() - started, 4)
     requirements = {key: job.match.get(key, []) for key in
                     ("required_skills", "preferred_skills", "matching_skills", "missing_skills", "alternative_skill_groups")}
     requirements["posting_requirements"] = job.match.get("requirement_evidence", {}).get("required", [])
     version = Resume(job_id=job.id, parent_id=request.parent_id, template=request.template, tex=tex, pdf=pdf,
                      report={**checks, "claims": claims, "bullets": bullets, "ai": meta, "posting_digest": posting_digest(job),
+                             "timing_seconds": {"fact_selection": selection_seconds, "compile_and_validate": compile_seconds},
                              "target_requirements": requirements,
                              "quality": quality_report(job, rendered, bullets, checks)})
     db.add(version)

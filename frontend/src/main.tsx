@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { request } from "./api";
 import type { State } from "./api";
-import { awaitsReview, initials, isApplicationException, isJobException, label, searchMatch } from "./domain";
+import { awaitsReview, initials, isApplicationException, isJobException, label, needsEligibilityReview, searchMatch } from "./domain";
 import { Empty, ErrorNotice, Feedback, Loading, Modal } from "./shared";
 import type { Mutate, PageProps } from "./shared";
 import { Analytics, Overview } from "./pages/overview";
@@ -128,7 +128,8 @@ function App() {
   const currentName = state?.profile.facts.find(fact => fact.category === "personal" && fact.label.toLowerCase() === "name" && fact.verified)?.value;
   const counts: Record<string, number> = {
     "/approvals": state?.applications.filter(awaitsReview).length ?? 0,
-    "/exceptions": new Set([...(state?.jobs.filter(isJobException).map(job => job.id) ?? []), ...(state?.applications.filter(isApplicationException).map(item => item.job_id) ?? [])]).size,
+    "/exceptions": new Set([...(state?.jobs.filter(job => isJobException(job) || needsEligibilityReview(job)).map(job => job.id) ?? []),
+      ...(state?.applications.filter(isApplicationException).map(item => item.job_id) ?? [])]).size,
   };
 
   function openCommand() { setCommand(true); }

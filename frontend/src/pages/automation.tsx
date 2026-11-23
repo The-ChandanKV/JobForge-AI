@@ -22,7 +22,7 @@ export function Automation({ state, mutate, busy, revision }: PageProps) {
   const tailoring = state.jobs.some(job => job.automation.state === "STARTED");
   const current = preparing ? stageForKind.application : running && tailoring ? stageForKind.resume : phase ? stageForKind[phase.kind] : undefined;
   const retries = state.jobs.filter(isJobException);
-  const feedHealth = new Map<string, {status: string; listings?: number; checked_at: string; error?: string}>();
+  const feedHealth = new Map<string, NonNullable<typeof state.runs[number]["report"]["sources"]>[string]>();
   for (const run of state.runs) {
     for (const [source, health] of Object.entries(run.report.sources ?? {})) {
       if (!feedHealth.has(source)) feedHealth.set(source, health);
@@ -63,14 +63,23 @@ export function Automation({ state, mutate, busy, revision }: PageProps) {
       </Panel>
       <Panel title="Source health">
         {feedHealth.size ? <ul className="entries">{[...feedHealth].map(([source, health]) => <li key={source}>
-          <div><strong>{source}</strong><small>{health.listings ?? "—"} listings · {date(health.checked_at, timezone)}</small></div>
+          <div><strong>{source}</strong><small>{health.listings ?? "—"} listings · {date(health.checked_at, timezone)}
+            {health.seconds !== undefined && " · " + health.seconds.toFixed(2) + " s"}</small></div>
           <Status value={health.error ? health.status + " · " + health.error : health.status}/>
         </li>)}</ul> : <Empty>No source checks have been recorded.</Empty>}
       </Panel>
       <Panel title="Recent runs">
         {state.runs.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Created</th><th>Trigger</th><th>Status</th><th>Attempts</th><th>Scanned</th><th>Prepared</th><th>Action</th></tr></thead>
           <tbody>{state.runs.map(run => <tr key={run.id}><td>{date(run.created, timezone)}</td><td>{label(run.trigger)}</td>
-            <td><Status value={run.status}/>{run.report.error && <small className="row-note">{run.report.error}</small>}</td>
+            <td><Status value={run.status}/>{run.report.error && <small className="row-note">{run.report.error}</small>}
+              {run.report.timings && <details><summary>Run measurements</summary><Details values={{
+                filtered: run.report.filtered, discovered: run.report.discovered, eligible: run.report.eligible,
+                shortlisted: run.report.shortlisted, "Eligibility review": run.report.needs_review, "PDFs reused": run.report.resume_reused,
+                ...Object.fromEntries(Object.entries(run.report.timings).map(([stage, timing]) =>
+                  [label(stage), timing.seconds.toFixed(2) + " s across " + timing.count + " operations"])),
+                "SQL statements": run.report.database?.statements,
+                "SQL execution seconds": run.report.database?.seconds,
+              }}/></details>}</td>
             <td>{run.attempts}</td><td>{run.report.scanned ?? "—"}</td><td>{run.report.prepared ?? "—"}</td>
             <td>{!run.canceled && ["QUEUED", "RUNNING"].includes(run.status) && <Button variant="outline" size="sm" disabled={busy} onClick={() => void mutate("/api/runs/" + run.id + "/cancel", "POST", undefined, "Cancellation requested.")}>Cancel</Button>}</td></tr>)}</tbody></table></div>
           : <Empty>No worker runs recorded.</Empty>}

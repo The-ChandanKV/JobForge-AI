@@ -21,6 +21,8 @@ export function stage(job: Job, application?: Application): Stage {
 }
 
 export const isJobException = (job: Job) => ["EXCEPTION", "RETRY_WAIT"].includes(job.automation.state ?? "");
+export const needsEligibilityReview = (job: Job) => job.available && job.match.eligibility === "NEEDS_REVIEW"
+  && !["SKIPPED", "CLOSED"].includes(job.status);
 export const awaitsReview = (app: Application) => ["READY_FOR_REVIEW", "NEEDS_MANUAL_ACTION"].includes(app.review_status);
 export const isApplicationException = (app: Application) =>
   ["NEEDS_MANUAL_ACTION", "FAILED", "SUBMISSION_UNCERTAIN", "SUBMISSION_FAILED", "SUBMISSION_BLOCKED"].includes(app.review_status)

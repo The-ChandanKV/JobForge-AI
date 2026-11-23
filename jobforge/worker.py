@@ -1,26 +1,27 @@
 import logging
 import signal
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
-from time import process_time
+from time import perf_counter, process_time
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
-from httpx import HTTPError
 
 from . import activation, employers
 from .applications import prepare, reconcile, still_verified
 from .intelligence import priority_score, ranking_feedback, semantic_cache_key
 from .llm import model_status, semantic_relevance
-from .matching import analyze, evaluate_saved_job, shortlist
+from .matching import MATCH_RULES_VERSION, analyze, evaluate_saved_job, shortlist
 from .models import Application, Job, JobSource, Log, Profile, Resume, Run, Session, Settings, SubmissionTask, WorkerLock, now, uid
 from .notifications import deliver_review_notifications, record_daily_summary, record_repeat_failures, send_run_summary
 from .submission import process_one
 from .profile import readiness
 from .providers import fetch_board, fold, save_job
-from .reliability import anchor_worker, worker_memory_mib
-from .resumes import generate, posting_digest
+from .reliability import anchor_worker, observe_sql, worker_memory_mib
+from .resumes import ResumeValidationError, generate, posting_digest
 from .schemas import Generation, Options, Posting, Preferences
 
 STOP = threading.Event()
@@ -163,14 +164,35 @@ def attempt(db, job):
 def failed_job(db, job, options, count, stage, exc):
     if job.status in {"SKIPPED", "CLOSED"}:
         return
-    exhausted = not options.retry_failed_jobs or count >= options.max_job_attempts
+    requires_fix = isinstance(exc, ResumeValidationError)
+    exhausted = requires_fix or not options.retry_failed_jobs or count >= options.max_job_attempts
     job.status = "FAILED"
     job.automation = {"state": "EXCEPTION" if exhausted else "RETRY_WAIT", "attempts": count,
                       "next_retry": None if exhausted else future(min(60, 2 ** count)),
-                      "reason": f"{stage} failed ({type(exc).__name__}).", "updated": now()}
+                      "reason": str(exc) if requires_fix else f"{stage} failed ({type(exc).__name__}).", "updated": now()}
     if not exhausted or options.exception_notifications:
         db.add(Log(kind="exception" if exhausted else "retry", message=job.automation["reason"],
                    detail={"job_id": job.id, "attempts": count, "next_retry": job.automation["next_retry"]}))
+
+
+@contextmanager
+def time_stage(result, stage):
+    started = perf_counter()
+    try:
+        yield
+    finally:
+        stats = result["timings"].setdefault(stage, {"count": 0, "seconds": 0.0})
+        stats["count"] += 1
+        stats["seconds"] += perf_counter() - started
+
+
+def fetch_source(source):
+    started = perf_counter()
+    try:
+        feed = fetch_board(source)
+    except Exception as exc:
+        feed = exc
+    return feed, round(perf_counter() - started, 4)
 
 
 def pipeline(run_id, lost):
@@ -187,7 +209,8 @@ def pipeline(run_id, lost):
             verified = {(source.provider, source.board.casefold()) for source in verified_sources}
     profile_ready = readiness(profile.facts)["ready"]
     result = {"scanned": 0, "filtered": 0, "discovered": 0, "eligible": 0, "compiled": 0,
-              "prepared": 0, "blocked_by_profile": 0, "exceptions": 0, "unchanged": 0, "sources": {}, "errors": []}
+              "prepared": 0, "shortlisted": 0, "needs_review": 0, "blocked_by_profile": 0, "exceptions": 0,
+              "unchanged": 0, "resume_reused": 0, "timings": {}, "sources": {}, "errors": []}
     if initial and not activation_setup["ready"]:
         result["errors"].append("Activation prerequisites changed before preparation. Open Activation to review.")
         return result
@@ -198,16 +221,29 @@ def pipeline(run_id, lost):
         return result
     career_sites = {(item[1], item[2].casefold()): item[-1] for item in employers.CATALOG.values()}
     confirmed_jobs = set()
-    for source in active_sources:
+    if canceled(run_id, lost):
+        return result
+    with time_stage(result, "discovery"), ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(fetch_source, source) for source in active_sources]
+        feeds = []
+        for future in futures:
+            if canceled(run_id, lost):
+                for waiting in futures:
+                    waiting.cancel()
+                return result
+            feeds.append(future.result())
+    for source, (feed, source_seconds) in zip(active_sources, feeds, strict=True):
         if canceled(run_id, lost):
             return result
         source_identity = f"{source.provider}/{source.board}"
         careers = career_sites.get((source.provider, source.board.casefold()), "")
         check_official = initial or (preferences.activation_confirmed and bool(careers))
         try:
-            jobs, complete = fetch_board(source)
+            if isinstance(feed, Exception):
+                raise feed
+            jobs, complete = feed
             result["sources"][source_identity] = {"status": "complete" if complete else "partial",
-                                                  "listings": len(jobs), "checked_at": now()}
+                                                  "listings": len(jobs), "checked_at": now(), "seconds": source_seconds}
             with Session.begin() as db:
                 existing = {entry.key: entry for entry in db.scalars(select(JobSource).where(
                     JobSource.key.startswith(f"{source.provider}:{source.board.lower()}:", autoescape=True)
@@ -221,30 +257,32 @@ def pipeline(run_id, lost):
                         result["filtered"] += 1
                         continue
                     seen.add(posting.source_key)
-                    if posting.source_key not in existing and (
-                        not shortlist(posting, preferences)
-                        or analyze(posting, profile.facts, preferences, options.min_match_score)["eligibility"] == "INELIGIBLE"
-                    ):
-                        result["filtered"] += 1
-                        continue
+                    evaluated = None
                     alias = existing.get(posting.source_key)
+                    if not alias:
+                        with time_stage(result, "matching"):
+                            if shortlist(posting, preferences):
+                                evaluated = analyze(posting, profile.facts, preferences, options.min_match_score)
+                        if evaluated is None or evaluated["eligibility"] == "INELIGIBLE":
+                            result["filtered"] += 1
+                            continue
                     prior = db.get(Job, alias.job_id) if alias else None
                     unchanged = bool(prior and posting.source_key == prior.source_key and
                                      prior.detail == posting.model_dump(mode="json", exclude={"original_description"}))
                     saved = save_job(db, posting)
-                    if initial and saved.detail.get("source_key") == posting.source_key:
+                    if saved.detail.get("source_key") == posting.source_key:
                         confirmed_jobs.add(saved.id)
                     if unchanged:
                         result["unchanged"] += 1
-                        if saved.match:
-                            result["eligible"] += int(saved.match["eligibility"] == "ELIGIBLE")
+                        if saved.match.get("rules_version") == MATCH_RULES_VERSION:
                             continue
                     if saved.id not in known_job_ids:
                         result["discovered"] += 1
                         known_job_ids.add(saved.id)
                     previous = saved.match.get("recommendation")
-                    evaluate_saved_job(saved, profile.facts, preferences, options.min_match_score)
-                    result["eligible"] += int(saved.match["eligibility"] == "ELIGIBLE")
+                    with time_stage(result, "matching"):
+                        evaluate_saved_job(saved, profile.facts, preferences, options.min_match_score,
+                                           evaluated=evaluated if saved.detail.get("source_key") == posting.source_key else None)
                     if (saved.match["recommendation"] == "PREPARE_APPLICATION" and previous != "PREPARE_APPLICATION"
                             and shortlist(Posting.model_validate(saved.detail), preferences)):
                         db.add(Log(kind="match", message="Job meets the relevance threshold",
@@ -261,7 +299,8 @@ def pipeline(run_id, lost):
                 elif source.provider != "smartrecruiters" or not jobs:
                     result["errors"].append(f"{source.provider}/{source.board}: some listings could not be normalized")
         except Exception as exc:
-            result["sources"][source_identity] = {"status": "error", "checked_at": now(), "error": type(exc).__name__}
+            result["sources"][source_identity] = {"status": "error", "checked_at": now(), "error": type(exc).__name__,
+                                                  "seconds": source_seconds}
             result["errors"].append(f"{source.provider}/{source.board}: {type(exc).__name__}")
             phase_log("source", "Job board request or normalization failed", run_id=run_id,
                       provider=source.provider, board=source.board, error=type(exc).__name__)
@@ -275,10 +314,15 @@ def pipeline(run_id, lost):
         active_boards = {(source.provider, source.board.casefold()) for source in active_sources}
         discovered = {alias.job_id for alias in db.scalars(select(JobSource).where(JobSource.available))
                       if tuple(alias.key.split(":", 2)[:2]) in active_boards}
-        if initial:
-            discovered &= confirmed_jobs
-            result["eligible"] = sum(job.match.get("eligibility") == "ELIGIBLE" for job in db.scalars(
-                select(Job).where(Job.id.in_(discovered))))
+        discovered &= confirmed_jobs
+        reviewed = db.scalars(select(Job).where(Job.id.in_(discovered), Job.available)).all()
+        with time_stage(result, "matching"):
+            for job in reviewed:
+                if job.status in {"SKIPPED", "CLOSED"} or not shortlist(Posting.model_validate(job.detail), preferences):
+                    continue
+                result["eligible"] += int(job.match.get("eligibility") == "ELIGIBLE")
+                result["shortlisted"] += int(job.match.get("recommendation") == "PREPARE_APPLICATION")
+                result["needs_review"] += int(job.match.get("eligibility") == "NEEDS_REVIEW")
         prepared_today = db.scalar(select(func.count()).select_from(Application).where(
             Application.created >= day_start(options.timezone)
         ))
@@ -299,8 +343,10 @@ def pipeline(run_id, lost):
                 return result
             fingerprint = semantic_cache_key(job, options.semantic_model, profile.facts)
             cached = job.match.get("semantic", {})
-            score = cached.get("relevance") if cached.get("key") == fingerprint else semantic_relevance(
-                options.semantic_model, job.role, job.detail["description"], profile.facts)
+            score = cached.get("relevance")
+            if cached.get("key") != fingerprint:
+                with time_stage(result, "semantic_model"):
+                    score = semantic_relevance(options.semantic_model, job.role, job.detail["description"], profile.facts)
             if score is not None:
                 semantic_scores[job.id] = score
                 if cached.get("key") != fingerprint:
@@ -356,13 +402,17 @@ def pipeline(run_id, lost):
                 job = db.get(Job, candidate.id)
                 if not resume:
                     attempts += 1
-                    resume = generate(db, job, profile.facts, options, Generation(template="compact" if initial else "classic"))
+                    with time_stage(result, "resume_generation"):
+                        resume = generate(db, job, profile.facts, options, Generation(template="compact" if initial else "classic"))
                     result["compiled"] += 1
+                else:
+                    result["resume_reused"] += 1
                 db.execute(update(Job).where(Job.id == job.id, Job.status.not_in(["SKIPPED", "CLOSED"]))
                            .values(status="RESUME_READY"))
             if (previous_application or options.max_applications_per_day > prepared_today) and not canceled(run_id, lost):
                 stage = "Form preparation"
-                app = prepare(candidate.id, resume.id, profile, options.mode, candidate.match["eligibility"])
+                with time_stage(result, "application_preparation"):
+                    app = prepare(candidate.id, resume.id, profile, options.mode, candidate.match["eligibility"])
                 if app.summary.get("missing") or app.summary.get("exception"):
                     result["exceptions"] += 1
                 prepared_today += int(not previous_application)
@@ -410,7 +460,9 @@ def step():
         thread.start()
         try:
             cpu_started = process_time()
-            result = pipeline(job_run.id, lost)
+            with observe_sql() as database:
+                result = pipeline(job_run.id, lost)
+            result["database"] = database
             result["worker_cpu_seconds"] = round(process_time() - cpu_started, 4)
             result["worker_peak_rss_mib"] = worker_memory_mib()
             if lost.is_set():

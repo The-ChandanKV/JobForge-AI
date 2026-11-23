@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from . import greenhouse
 from .matching import profile_field
 from .models import Application, ApplicationEvent, FinalApproval, Job, Log, Notification, Profile, Receipt, Resume, Session, SubmissionTask, now
+from .providers import safe_url
 
 FIELDS = {"name": "Name", "email": "Email", "phone": "Phone", "authorization": "Mock screening answer"}
 PREPARABLE = {"FAILED", "NEEDS_REVIEW", "NEEDS_MANUAL_ACTION", "APPLICATION_PREPARED", "READY_FOR_REVIEW", "SKIPPED"}
@@ -160,12 +161,15 @@ def prepare(job_id, resume_id, profile, mode, eligibility, review_accepted=False
         summary["integration"] = "greenhouse"
         summary["official_url"] = job.detail.get("apply_url")
     else:
+        destination = safe_url(job.detail.get("apply_url")) or safe_url(job.detail.get("url"))
         values = {key: value for key, value in contacts(profile).items() if key != "authorization" and value}
-        summary.update({"filled": ["Resume prepared for manual handoff"], "missing": []})
-        if mode != "MANUAL" and job.detail["source"] != "mock":
+        if not destination:
+            summary.update({"missing": ["Provide an official application link."], "filled": [],
+                            "exception": "No official application link is available.", "unsupported_destination": True})
+        else:
+            summary.update({"filled": ["Resume prepared for manual handoff"], "missing": [], "official_url": destination})
+        if destination and mode != "MANUAL" and job.detail["source"] != "mock":
             summary["exception"] = "This employer portal requires manual application."
-        if job.detail.get("apply_url"):
-            summary["official_url"] = job.detail["apply_url"]
     # The review snapshot and immutable approval refer to the private SQL PDF blob.
     from .resumes import cover_letter
     letter = cover_letter(job, profile.facts) if profile_field(profile.facts, "Name", "personal") else None

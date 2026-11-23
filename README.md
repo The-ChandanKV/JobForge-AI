@@ -1,5 +1,9 @@
 # JobForge AI
 
+## Workflow validation
+
+Phase 9 verified live discovery across seven employer boards. The active search produced one saved job requiring eligibility review and zero prepared applications. Open **Automation** for source health and run measurements, and **Exceptions** for job-specific blockers. [Phase 9 results](docs/PHASE_9_VALIDATION.md)
+
 ## Activate a personal search
 
 Open Activation to review original resume evidence, edit your preferences, and choose verified boards. One confirmation saves your choices and queues the first dry run. [Activation](http://127.0.0.1:8000/activation) · [Activation guide](docs/PHASE_7_ACTIVATION.md) · [Preparation workflow](docs/REAL_APPLICATION_PREPARATION.md)

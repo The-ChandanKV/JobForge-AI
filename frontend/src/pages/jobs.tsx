@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { jobPath, officialUrl } from "../api";
 import type { Job } from "../api";
-import { date, label, searchMatch } from "../domain";
+import { date, isJobException, label, needsEligibilityReview, searchMatch } from "../domain";
 import { Details, Empty, ErrorNotice, Heading, Loading, Modal, Panel, Status, useResource } from "../shared";
 import type { PageProps } from "../shared";
 import { Company } from "./overview";
@@ -43,6 +43,14 @@ export function JobDrawer({ id, close, revision, mutate, busy }: Pick<PageProps,
       </div>
       <Link className="text-link" to={"/intelligence?job=" + id}>Open Job Intelligence <ArrowUpRight size={14}/></Link>
       <MatchDetails job={job}/>
+      {(isJobException(job) || needsEligibilityReview(job)) && <Panel title="Preparation checkpoint">
+        {isJobException(job) ? <>
+          <p>{job.automation.reason}</p>
+          <Details values={{attempts: job.automation.attempts, "Automatic retry": job.automation.next_retry ? date(job.automation.next_retry) : "Stopped"}}/>
+          <p>Resolve the failure before resetting retries in Exceptions.</p>
+        </> : <p>Review the employer requirements and update verified profile evidence if it applies. Automatic preparation waits for eligibility.</p>}
+        {!!job.logs?.length && <ul className="entries">{job.logs.map(log => <li key={log.id}><span>{log.message}</span><small>{date(log.created)}</small></li>)}</ul>}
+      </Panel>}
       <Panel title="Posting"><Details values={{ source: job.source, location: job.location, "work mode": job.work_mode, employment: job.employment, "last verified": date(job.verified) }}/>
         <p className="preserve">{job.description || "No job description was saved."}</p></Panel>
     </>}
