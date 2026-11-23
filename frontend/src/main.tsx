@@ -12,6 +12,7 @@ import { awaitsReview, initials, isApplicationException, isJobException, label, 
 import { Empty, ErrorNotice, Feedback, Loading, Modal } from "./shared";
 import type { Mutate, PageProps } from "./shared";
 import { Analytics, Overview } from "./pages/overview";
+import { JobIntelligence } from "./pages/intelligence";
 import { Jobs } from "./pages/jobs";
 import { Pipeline } from "./pages/pipeline";
 import { Studio } from "./pages/studio";
@@ -23,6 +24,7 @@ import "./workspace.css";
 const workspace = [
   {path: "/", name: "Overview", Icon: LayoutDashboard},
   {path: "/jobs", name: "Job discovery", Icon: Briefcase},
+  {path: "/intelligence", name: "Job Intelligence", Icon: Briefcase},
   {path: "/pipeline", name: "Pipeline", Icon: GitBranch},
   {path: "/resume-studio", name: "Resume Studio", Icon: FileText},
   {path: "/history", name: "History", Icon: History},
@@ -171,6 +173,7 @@ function App() {
           {props && <Routes>
             <Route path="/" element={<Overview {...props}/>}/>
             <Route path="/jobs" element={<Jobs {...props}/>}/>
+            <Route path="/intelligence" element={<JobIntelligence {...props}/>}/>
             <Route path="/pipeline" element={<Pipeline key="pipeline" mode="pipeline" {...props}/>}/>
             <Route path="/resume-studio" element={<Studio {...props}/>}/>
             <Route path="/automation" element={<Automation {...props}/>}/>

@@ -54,7 +54,7 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                     "/jobs": "Job discovery", "/pipeline": "Application pipeline",
                     "/resume-studio": "AI Resume Studio", "/approvals": "Approval queue",
                     "/exceptions": "Exception queue", "/automation": "Automation center",
-                    "/history": "Application history", "/analytics": "Analytics", "/settings": "Settings",
+                    "/intelligence": "Job Intelligence", "/history": "Application history", "/analytics": "Analytics", "/settings": "Settings",
                     "/profile": "Candidate profile", "/notifications": "Notifications",
                 }.items():
                     page.goto(origin + route)
@@ -165,6 +165,8 @@ def test_workspace_routes_resume_and_authenticated_approval(tmp_path):
                 expect(button).to_be_disabled()
                 page.goto(origin + "/settings")
                 expect(page.get_by_label("Enable individually approved Greenhouse submission")).to_be_disabled()
+                expect(page.get_by_role("heading", name="Discover employers")).to_be_visible()
+                expect(page.get_by_role("button", name="Enable monitoring").first).to_be_disabled()
                 page.get_by_label("Interval minutes", exact=True).fill("120")
                 page.get_by_role("button", name="Save settings").click()
                 expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()

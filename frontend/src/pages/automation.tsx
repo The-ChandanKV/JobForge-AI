@@ -22,6 +22,12 @@ export function Automation({ state, mutate, busy, revision }: PageProps) {
   const tailoring = state.jobs.some(job => job.automation.state === "STARTED");
   const current = preparing ? stageForKind.application : running && tailoring ? stageForKind.resume : phase ? stageForKind[phase.kind] : undefined;
   const retries = state.jobs.filter(isJobException);
+  const feedHealth = new Map<string, {status: string; listings?: number; checked_at: string; error?: string}>();
+  for (const run of state.runs) {
+    for (const [source, health] of Object.entries(run.report.sources ?? {})) {
+      if (!feedHealth.has(source)) feedHealth.set(source, health);
+    }
+  }
   return <>
     <Heading title="Automation center" description="Monitor worker health, job preparation, retries, and scheduled activity.">
       <Button variant="outline" disabled={busy} onClick={() => void mutate("/api/settings", "PUT", {...state.options, enabled: !state.options.enabled}, state.options.enabled ? "Scheduled automation paused." : "Scheduled automation resumed.")}>
@@ -54,6 +60,12 @@ export function Automation({ state, mutate, busy, revision }: PageProps) {
       <Panel title="Preparation workflow">
         <ol className="workflow" aria-label="Automation steps">{workflow.map((name, index) =>
           <li key={name} className={"workflow-step " + (index === current ? "current" : "")}><span className="workflow-node"><Clock3 size={14}/></span><span>{name}</span></li>)}</ol>
+      </Panel>
+      <Panel title="Source health">
+        {feedHealth.size ? <ul className="entries">{[...feedHealth].map(([source, health]) => <li key={source}>
+          <div><strong>{source}</strong><small>{health.listings ?? "—"} listings · {date(health.checked_at, timezone)}</small></div>
+          <Status value={health.error ? health.status + " · " + health.error : health.status}/>
+        </li>)}</ul> : <Empty>No source checks have been recorded.</Empty>}
       </Panel>
       <Panel title="Recent runs">
         {state.runs.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Created</th><th>Trigger</th><th>Status</th><th>Attempts</th><th>Scanned</th><th>Prepared</th><th>Action</th></tr></thead>

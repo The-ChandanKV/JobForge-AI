@@ -9,6 +9,7 @@ import { Details, Empty, ErrorNotice, Heading, Loading, Modal, Panel, Status, us
 import type { PageProps } from "../shared";
 import { JobDrawer, MatchDetails } from "./jobs";
 import { Company } from "./overview";
+import { Readiness } from "./intelligence";
 import { ReviewBatch } from "./review-batch";
 
 const editable = ["APPLICATION_PREPARED", "READY_FOR_REVIEW", "NEEDS_REVIEW", "NEEDS_MANUAL_ACTION", "APPROVED", "FAILED"];
@@ -181,6 +182,7 @@ function ReviewDrawer({ id, close, mutate, revision, busy, selected, toggle }: P
           <ErrorNotice message={eventError}/>{!events && !eventError && <Loading/>}
           {events?.length ? <ul className="entries">{events.map((event, index) => <li key={event.created + index}><div><strong>{label(event.status)}</strong><small>{event.message}</small></div><small>{date(event.created)}</small></li>)}</ul> : events && <Empty>No timeline events recorded.</Empty>}
         </Panel>
+        {review.readiness_details && <Readiness value={review.readiness_details}/>}
         <MatchDetails job={review.job}/>
         <Panel title="Original job description"><p className="preserve">{review.original_description ?? review.job.description ?? "No description was saved."}</p></Panel>
         {toggle && review.payload_hash && (selected || rejectable.includes(app.status)) && <Button

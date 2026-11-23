@@ -1,0 +1,14 @@
+[
+  {
+    "source_key": "greenhouse:anthropic:4899511008",
+    "reviewer": "assistant evidence review",
+    "scope": "The mandatory mobile-platform line explicitly lists these technologies.",
+    "required_skill_subset": ["Kotlin", "Jetpack Compose", "Android SDK"]
+  },
+  {
+    "source_key": "greenhouse:mongodb:7613695",
+    "reviewer": "assistant evidence review",
+    "scope": "The posting identifies Dublin for its hybrid working model.",
+    "location_terms": ["Dublin"]
+  }
+]

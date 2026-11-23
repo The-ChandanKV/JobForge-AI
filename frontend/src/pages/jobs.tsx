@@ -20,6 +20,7 @@ export function MatchDetails({ job }: { job: Job }) {
     {match.concerns?.length ? <ul className="bullets">{match.concerns.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}
     <Details values={{ "Verified matches": match.matching_skills?.join(", "), "Required skills": match.required_skills?.join(", "),
       "Missing skills": match.missing_skills?.join(", "), "Preferred skills": match.preferred_skills?.join(", ") }}/>
+    {!!match.alternative_skill_groups?.length && <p>One skill per group · {match.alternative_skill_groups.map(group => group.join(" or ")).join(" · ")}</p>}
     {!!match.components && <details><summary>Score breakdown</summary><Details values={match.components}/></details>}
     {!!match.requirement_evidence && <details><summary>Posting requirements</summary>
       <Details values={Object.fromEntries(Object.entries(match.requirement_evidence).filter(([, lines]) => lines.length).map(([key, lines]) => [key, lines.join("\n")]))}/>
@@ -40,6 +41,7 @@ export function JobDrawer({ id, close, revision, mutate, busy }: Pick<PageProps,
         {job.available && <Button asChild><Link to={"/resume-studio?job=" + id}>Prepare resume</Link></Button>}
         {official && <a className="text-link" href={official} target="_blank" rel="noreferrer">Original posting <ArrowUpRight size={14}/></a>}
       </div>
+      <Link className="text-link" to={"/intelligence?job=" + id}>Open Job Intelligence <ArrowUpRight size={14}/></Link>
       <MatchDetails job={job}/>
       <Panel title="Posting"><Details values={{ source: job.source, location: job.location, "work mode": job.work_mode, employment: job.employment, "last verified": date(job.verified) }}/>
         <p className="preserve">{job.description || "No job description was saved."}</p></Panel>

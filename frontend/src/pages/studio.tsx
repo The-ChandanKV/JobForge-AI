@@ -128,7 +128,9 @@ function VersionWorkspace({ jobId, facts, mutate, revision, busy }: Pick<PagePro
       <Panel title="Evidence-backed changes">
         {current.report.bullets?.length ? <ul className="entries evidence-list">{current.report.bullets.map((bullet, index) => {
           if (!bullet || typeof bullet !== "object" || !("text" in bullet) || !("fact_id" in bullet)) return null;
-          return <li key={index}><div><strong>{display(bullet.text)}</strong><small>Verified source · {claims.get(String(bullet.fact_id)) ?? "Unavailable"}</small></div></li>;
+          return <li key={index}><div><strong>{display(bullet.text)}</strong><small>Verified source · {claims.get(String(bullet.fact_id)) ?? "Unavailable"}</small>
+            {"reason" in bullet && <small>{display(bullet.reason)}</small>}
+            {"skills" in bullet && Array.isArray(bullet.skills) && bullet.skills.length > 0 && <small>Matching skills · {bullet.skills.join(", ")}</small>}</div></li>;
         })}</ul> : <Empty>This version has no separately recorded bullet changes.</Empty>}
         <details><summary>Validation and quality report</summary><Details values={Object.fromEntries(Object.entries(current.report).filter(([key]) => !["claims", "bullets"].includes(key)))}/></details>
       </Panel>

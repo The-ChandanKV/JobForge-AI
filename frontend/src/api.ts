@@ -12,7 +12,7 @@ export interface Fact {
 
 export type Preferences = Record<string, string[] | string | number | boolean | null>;
 export type Profile = { facts: Fact[]; preferences: Preferences };
-export type Source = { provider: string; board: string; company: string; enabled: boolean };
+export type Source = { provider: string; board: string; company: string; enabled: boolean; search?: string };
 export interface Options {
   enabled: boolean;
   interval_minutes: number;
@@ -32,6 +32,8 @@ export interface Options {
   automation_mode: string;
   provider: string | null;
   model: string;
+  semantic_model: string;
+  tailoring_model: string;
   timezone: string;
   sources: Source[];
 }
@@ -43,9 +45,12 @@ export interface Match {
   reason?: string;
   matching_skills?: string[];
   required_skills?: string[];
+  alternative_skill_groups?: string[][];
   missing_skills?: string[];
   preferred_skills?: string[];
   concerns?: string[];
+  relevant_projects?: string[];
+  semantic?: { relevance: number; model: string };
   components?: Record<string, number>;
   requirement_evidence?: Record<string, string[]>;
 }
@@ -112,7 +117,7 @@ export interface Run {
   canceled: boolean;
   attempts: number;
   created: string;
-  report: { scanned?: number; filtered?: number; discovered?: number; compiled?: number; prepared?: number; error?: string };
+  report: { scanned?: number; filtered?: number; unchanged?: number; sources?: Record<string, {status: string; listings?: number; checked_at: string; error?: string}>; discovered?: number; compiled?: number; prepared?: number; error?: string };
 }
 
 export interface State {
@@ -142,6 +147,15 @@ export interface Resume {
   report: { bullets?: unknown[]; claims?: unknown[]; [key: string]: unknown };
 }
 
+export interface ReadinessSummary {
+  category: string;
+  verified_checks: number;
+  total_checks: number;
+  checks: Record<string, boolean | null>;
+  pending: string[];
+  manual_url: string | null;
+}
+
 export interface Review {
   application: Application;
   job: Job;
@@ -159,6 +173,7 @@ export interface Review {
   resume: Pick<Resume, "id" | "template" | "created">;
   original_description: string | null;
   readiness: string;
+  readiness_details?: ReadinessSummary;
   approvable: boolean;
   refusal: string | null;
   task: { status: string; result?: string; provider?: string; approved_at?: string; attempted_at?: string; finished_at?: string; preflight_attempts?: number } | null;

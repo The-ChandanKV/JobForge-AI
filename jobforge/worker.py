@@ -10,15 +10,16 @@ from sqlalchemy.exc import IntegrityError
 from httpx import HTTPError
 
 from .applications import prepare, reconcile, still_verified
-from .llm import model_status
+from .intelligence import priority_score, ranking_feedback, semantic_cache_key
+from .llm import model_status, semantic_relevance
 from .matching import analyze, evaluate_saved_job, shortlist
 from .models import Application, Job, JobSource, Log, Profile, Resume, Run, Session, Settings, SubmissionTask, WorkerLock, now, uid
 from .notifications import deliver_review_notifications, record_daily_summary, record_repeat_failures, send_run_summary
 from .submission import process_one
 from .profile import readiness
-from .providers import fetch_board, save_job
+from .providers import fetch_board, fold, save_job
 from .reliability import anchor_worker, worker_memory_mib
-from .resumes import generate
+from .resumes import generate, posting_digest
 from .schemas import Generation, Options, Posting, Preferences
 
 STOP = threading.Event()
@@ -176,15 +177,19 @@ def pipeline(run_id, lost):
         profile = db.get(Profile, 1)
         options = Options.model_validate(db.get(Settings, 1).options)
         preferences = Preferences.model_validate(profile.preferences)
+        known_job_ids = set(db.scalars(select(Job.id)))
     profile_ready = readiness(profile.facts)["ready"]
     result = {"scanned": 0, "filtered": 0, "discovered": 0, "eligible": 0, "compiled": 0,
-              "prepared": 0, "blocked_by_profile": 0, "exceptions": 0, "errors": []}
+              "prepared": 0, "blocked_by_profile": 0, "exceptions": 0, "unchanged": 0, "sources": {}, "errors": []}
     active_sources = [source for source in options.sources if source.enabled]
     for source in active_sources:
         if canceled(run_id, lost):
             return result
+        source_identity = f"{source.provider}/{source.board}"
         try:
             jobs, complete = fetch_board(source)
+            result["sources"][source_identity] = {"status": "complete" if complete else "partial",
+                                                  "listings": len(jobs), "checked_at": now()}
             with Session.begin() as db:
                 existing = {entry.key: entry for entry in db.scalars(select(JobSource).where(
                     JobSource.key.startswith(f"{source.provider}:{source.board.lower()}:", autoescape=True)
@@ -199,8 +204,19 @@ def pipeline(run_id, lost):
                     ):
                         result["filtered"] += 1
                         continue
+                    alias = existing.get(posting.source_key)
+                    prior = db.get(Job, alias.job_id) if alias else None
+                    unchanged = bool(prior and posting.source_key == prior.source_key and
+                                     prior.detail == posting.model_dump(mode="json", exclude={"original_description"}))
                     saved = save_job(db, posting)
-                    result["discovered"] += 1
+                    if unchanged:
+                        result["unchanged"] += 1
+                        if saved.match:
+                            result["eligible"] += int(saved.match["eligibility"] == "ELIGIBLE")
+                            continue
+                    if saved.id not in known_job_ids:
+                        result["discovered"] += 1
+                        known_job_ids.add(saved.id)
                     previous = saved.match.get("recommendation")
                     evaluate_saved_job(saved, profile.facts, preferences, options.min_match_score)
                     result["eligible"] += int(saved.match["eligibility"] == "ELIGIBLE")
@@ -217,15 +233,20 @@ def pipeline(run_id, lost):
                         job.available = bool(db.scalar(select(JobSource.key).where(
                             JobSource.job_id == job_id, JobSource.available, ~JobSource.key.startswith("manual:")
                         ).limit(1)))
-                else:
+                elif source.provider != "smartrecruiters" or not jobs:
                     result["errors"].append(f"{source.provider}/{source.board}: some listings could not be normalized")
         except Exception as exc:
+            result["sources"][source_identity] = {"status": "error", "checked_at": now(), "error": type(exc).__name__}
             result["errors"].append(f"{source.provider}/{source.board}: {type(exc).__name__}")
             phase_log("source", "Job board request or normalization failed", run_id=run_id,
-                      provider=source.provider, error=type(exc).__name__)
+                      provider=source.provider, board=source.board, error=type(exc).__name__)
     with Session() as db:
         candidates = db.scalars(select(Job).where(Job.available, Job.status.in_(["SHORTLISTED", "RESUME_READY", "FAILED"]))).all()
-        candidates.sort(key=lambda job: job.match.get("match_score", 0), reverse=True)
+        preferred = {fold(company) for company in preferences.priority_companies}
+        history = ranking_feedback(db)
+        completed_applications = {app.job_id for app in db.scalars(select(Application).where(Application.status != "FAILED"))
+                                  if app.summary.get("checkpoint") != "PREPARING"} if options.semantic_model else set()
+        candidates.sort(key=lambda job: priority_score(job, preferred, history), reverse=True)
         active_boards = {(source.provider, source.board.casefold()) for source in active_sources}
         discovered = {alias.job_id for alias in db.scalars(select(JobSource).where(JobSource.available))
                       if tuple(alias.key.split(":", 2)[:2]) in active_boards}
@@ -240,6 +261,29 @@ def pipeline(run_id, lost):
         if canceled(run_id, lost):
             return result
         reconcile(application_id)
+    if profile_ready and options.semantic_model and options.provider in {None, "ollama"}:
+        shortlisted = [job for job in candidates if job.id in discovered and job.id not in completed_applications and
+                       job.match.get("recommendation") == "PREPARE_APPLICATION"][:3]
+        semantic_scores = {}
+        for job in shortlisted:
+            if canceled(run_id, lost):
+                return result
+            fingerprint = semantic_cache_key(job, options.semantic_model, profile.facts)
+            cached = job.match.get("semantic", {})
+            score = cached.get("relevance") if cached.get("key") == fingerprint else semantic_relevance(
+                options.semantic_model, job.role, job.detail["description"], profile.facts)
+            if score is not None:
+                semantic_scores[job.id] = score
+                if cached.get("key") != fingerprint:
+                    with Session.begin() as db:
+                        current = db.get(Job, job.id)
+                        current.match = {**current.match, "semantic": {"key": fingerprint,
+                                         "relevance": score, "model": options.semantic_model}}
+            if score is None:
+                break
+        if semantic_scores:
+            candidates.sort(key=lambda job: (priority_score(job, preferred, history)[0] +
+                                             semantic_scores.get(job.id, 0) / 5, job.verified), reverse=True)
     attempts = 0
     for candidate in candidates:
         if canceled(run_id, lost):
@@ -269,7 +313,8 @@ def pipeline(run_id, lost):
                         failed_job(db, job, options, job.automation["attempts"], "Interrupted preparation", RuntimeError())
                     continue
                 resume = db.scalar(select(Resume).where(Resume.job_id == job.id).order_by(Resume.created.desc(), Resume.id.desc()).limit(1))
-                if resume and not still_verified(profile, resume):
+                if resume and (not still_verified(profile, resume) or (
+                        resume.report.get("posting_digest") and resume.report["posting_digest"] != posting_digest(job))):
                     resume = None
                 if not resume and attempts >= options.max_resume_generations_per_run:
                     continue

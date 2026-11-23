@@ -19,16 +19,17 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import greenhouse, submission
+from . import employers, greenhouse, submission
 from .applications import answers_digest, expected_pdf, prepare, reconcile, record, still_verified, submit_simulation
 from .config import ACCESS_TOKEN, MAX_UPLOAD, ROOT
+from .intelligence import application_readiness, feedback_for, semantic_cache_key
 from .llm import configured
 from .matching import analyze, evaluate_saved_job, expired
-from .models import Application, ApplicationEvent, FinalApproval, Job, JobDescription, Log, Notification, Profile, Receipt, Resume, Run, Session, Settings, SubmissionTask, Upload, now, uid
+from .models import Application, ApplicationEvent, FinalApproval, Job, JobDescription, JobSource, Log, Notification, Profile, Receipt, Resume, Run, Session, Settings, SubmissionTask, Upload, now, uid
 from .notifications import deliver_review_notifications, record_worker_health
 from .profile import extract_text, parse_file, readiness
 from .permissions import create_policy
-from .providers import clean_html, intake, save_job
+from .providers import clean_html, fold, intake, save_job
 from .reliability import cadence, report as reliability_report
 from .resumes import cover_letter, generate, recompile
 from .schemas import Edit, Generation, Intake, Options, PolicyRequest, Posting, Preferences, ProfileInput
@@ -144,6 +145,7 @@ def health():
 @app.get("/settings")
 @app.get("/profile")
 @app.get("/notifications")
+@app.get("/intelligence")
 @app.get("/legacy")
 def dashboard(request: Request):
     try:
@@ -311,6 +313,30 @@ def download_upload(upload_id: str):
                         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"})
 
 
+class MonitorEmployer(BaseModel):
+    enabled: bool
+    group: Literal["priority", "regular", "excluded"]
+
+
+@app.get("/api/employers", dependencies=AUTH)
+def discover_employers(company: str = "", industry: str = "", location: str = "", role: str = ""):
+    with Session() as db:
+        options = Options.model_validate(db.get(Settings, 1).options)
+        return employers.company_records(db, options, (company, industry, location, role))
+
+
+@app.post("/api/employers/{key}/verify", dependencies=AUTH)
+def verify_employer(key: str):
+    return employers.verify_catalog_source(Session, key)
+
+
+@app.put("/api/employers/{key}/monitor", dependencies=AUTH)
+def monitor_employer(key: str, request: MonitorEmployer):
+    with Session.begin() as db:
+        employers.update_monitor(db, lock_settings(db), key, request.enabled, request.group)
+    return {"enabled": request.enabled, "group": request.group}
+
+
 @app.put("/api/settings", dependencies=AUTH)
 def settings_update(options: Options):
     if options.auto_submit or options.automation_mode == "AUTHORIZED_AUTO_SUBMIT":
@@ -323,6 +349,12 @@ def settings_update(options: Options):
     with Session.begin() as db:
         row = lock_settings(db)
         previous = Options.model_validate(row.options)
+        earlier = {(source.provider, source.board.casefold()) for source in previous.sources if source.enabled}
+        for source in options.sources:
+            identity = (source.provider, source.board.casefold())
+            if (source.enabled and source.provider in {"smartrecruiters", "recruitee"} and identity not in earlier
+                    and not employers.recently_verified(db, *identity)):
+                raise ValueError("Verify this employer in the discovery catalog before enabling its board.")
         options.submission_policy = previous.submission_policy
         row.options = options.model_dump(mode="json")
         if previous.interval_minutes != options.interval_minutes or previous.enabled != options.enabled:
@@ -444,6 +476,50 @@ def add_job(payload: Intake):
 def job_detail(job_id: str):
     with Session() as db:
         return job_item(required(db, Job, job_id))
+
+
+class RecommendationFeedback(BaseModel):
+    value: Literal["good", "bad", "not_interested", "already_applied", "wrong_level"]
+
+
+@app.post("/api/jobs/{job_id}/feedback", dependencies=AUTH)
+def job_feedback(job_id: str, request: RecommendationFeedback):
+    with Session.begin() as db:
+        lock_settings(db)
+        job = required(db, Job, job_id)
+        feedback = feedback_for(db, job)
+        if not feedback or feedback["value"] != request.value:
+            db.add(Log(kind="recommendation_feedback", message="Job recommendation feedback recorded",
+                       detail={"job_id": job.id, "value": request.value,
+                               "company": fold(job.company), "role": fold(job.role)}))
+        if request.value in {"not_interested", "already_applied", "wrong_level"} and job.status != "CLOSED":
+            job.status = "SKIPPED"
+    return {"value": request.value}
+
+
+@app.get("/api/jobs/{job_id}/intelligence", dependencies=AUTH)
+def job_intelligence(job_id: str):
+    with Session() as db:
+        job = required(db, Job, job_id)
+        profile = db.get(Profile, 1)
+        application = db.scalar(select(Application).where(Application.job_id == job_id))
+        resume = db.get(Resume, application.resume_id) if application else db.scalar(select(Resume).where(
+            Resume.job_id == job_id).order_by(Resume.created.desc(), Resume.id.desc()).limit(1))
+        feedback = feedback_for(db, job)
+        dispatch = bool(application and submission.provider_available(submission.context_for(db, application)))
+        readiness_summary = application_readiness(job, profile, resume, application, can_dispatch=dispatch,
+                                                 already_applied=bool(feedback and feedback["value"] == "already_applied"))
+        evidence = [row_item(source, "key canonical_url verified available") for source in db.scalars(
+            select(JobSource).where(JobSource.job_id == job.id).order_by(JobSource.verified.desc())
+        )]
+        public = job_item(job)
+        cached = public["match"].get("semantic")
+        model = Options.model_validate(db.get(Settings, 1).options).semantic_model
+        if cached and (not model or cached.get("key") != semantic_cache_key(job, model, profile.facts)):
+            public["match"] = {key: value for key, value in public["match"].items() if key != "semantic"}
+        return {"job": public, "readiness": readiness_summary, "sources": evidence,
+                "resume": row_item(resume, "id template created") if resume else None,
+                "application_id": application.id if application else None, "feedback": feedback["value"] if feedback else None}
 
 
 class JobAction(BaseModel):
@@ -694,7 +770,9 @@ def application_review(app_id: str):
                 "resume": row_item(context.resume, "id template created"),
                 "original_description": clean_html(original) if original else original,
                 "readiness": submission.readiness(item), "approvable": approvable, "refusal": refusal,
-                "task": submission.visible_task(db, task)}
+                "task": submission.visible_task(db, task),
+                "readiness_details": application_readiness(context.job, context.profile, context.resume, item,
+                                                           can_dispatch=submission.provider_available(context))}
 
 
 @app.post("/api/applications/{app_id}/approve-submit", dependencies=AUTH, status_code=202)

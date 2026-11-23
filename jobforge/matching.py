@@ -7,7 +7,8 @@ from .schemas import Posting, Preferences
 SKILLS = ("Python", "SQL", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust", "FastAPI",
           "React", "Node.js", "Django", "Flask", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Docker",
           "Kubernetes", "AWS", "Azure", "GCP", "PyTorch", "TensorFlow", "Git", "Linux", "Kafka", "GraphQL",
-          "Spark", "Airflow", "ETL", "dbt", "Pandas", "Machine Learning", "NLP", "Scikit-learn", "Snowflake")
+          "Spark", "Airflow", "ETL", "dbt", "Pandas", "Machine Learning", "NLP", "Scikit-learn", "Snowflake",
+          "Kotlin", "Jetpack Compose", "Android SDK", "REST APIs", "Terraform", "Flink")
 TRACKS = {
     "entry-level": r"\b(?:entry[ -]level|junior|associate|engineer i)\b",
     "graduate": r"\b(?:graduate|new grad|campus)\b",
@@ -97,16 +98,27 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     preferred_lines = requirements["preferred"]
     verified_skills = profile_values(facts, "skill")
     vocabulary = list(dict.fromkeys([*SKILLS, *verified_skills]))
-    required = [s for s in vocabulary if any(has_skill(line, s) for line in required_lines)]
-    preferred = [s for s in vocabulary if s not in required and any(has_skill(line, s) for line in preferred_lines)]
+    alternatives = {}
+    for line in required_lines:
+        if re.search(r"(?i)\b(?:at least one|one of|either)\b", line) and not re.search(r"(?i)\band\b|;", line):
+            skills = tuple(skill for skill in vocabulary if has_skill(line, skill))
+            if len(skills) > 1:
+                alternatives[line] = skills
+    named_in_alternatives = {skill for group in alternatives.values() for skill in group}
+    required = [s for s in vocabulary if any(has_skill(line, s) for line in required_lines if line not in alternatives)]
+    preferred = [s for s in vocabulary if s not in required and s not in named_in_alternatives and any(has_skill(line, s) for line in preferred_lines)]
     mentioned = [s for s in vocabulary if has_skill(corpus, s)]
     matching = [s for s in mentioned if any(has_skill(v, s) for v in verified_skills)]
     missing = [s for s in required if s not in matching]
+    groups = list(dict.fromkeys(alternatives.values()))
+    unmet_groups = [group for group in groups if not set(group).intersection(matching)]
     fail, review = [], []
     if expired(posting.deadline):
         fail.append("The employer's application deadline has passed.")
     if missing:
         review.append("Verify mandatory skills: " + ", ".join(missing))
+    if unmet_groups:
+        review.extend("Verify one of the listed alternatives: " + ", ".join(group) for group in unmet_groups)
     if not any(f["verified"] for f in facts):
         review.append("Verify the master profile.")
     years = minimum_years(requirements, "required")
@@ -137,13 +149,14 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     if re.search(r"(?i)\b(work authori[sz]ation|no sponsorship|visa sponsorship|citizen(?:ship)?|right to work|authori[sz]ed to work)\b",
                  eligibility_text) and (not auth_matches or re.search(r"(?i)\b(sponsorship|citizen)", eligibility_text)):
         review.append("Review work authorization and sponsorship against the posting.")
-    geographic_requirement = re.search(r"(?i)\b(?:reside|located|based)\s+in\b|\bonly\s+(?:in|within)\b", desc)
+    geographic_requirement = re.search(
+        r"(?i)\b(?:(?:reside|located|based)\s+in|only\s+(?:in|within))\b(?:\s+[^.!?,;\n]{1,100})?", desc)
     if geographic_requirement:
         review.append("Review geographic restrictions.")
     if (re.search(r"(?i)\b(?:mandatory|required|must hold)\b.{0,40}\b(?:certification|licen[cs]e|clearance)\b|\bcertification\s+required\b", desc)
             or any(re.search(r"(?i)\b(?:certification|licen[cs]e|clearance)\b", line) for line in required_lines)):
         review.append("Review required certification, license, or clearance.")
-    if any(not YEARS.search(line) and not (auth_matches and authorization[0].casefold() in line.casefold())
+    if any(line not in alternatives and not YEARS.search(line) and not (auth_matches and authorization[0].casefold() in line.casefold())
            and not all(any(has_skill(fragment, skill) for skill in required)
                        for fragment in re.split(r"[,/]", line) if fragment.strip())
            for line in required_lines):
@@ -161,8 +174,10 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
                          and any(contains(f["value"], s) for s in mentioned)]
     role_aligned = (any(contains(posting.role, role) for role in preferences.roles)
                     or any(re.search(TRACKS[track], f"{posting.role} {posting.employment}", re.I) for track in preferences.career_tracks))
-    scored = required or [skill for skill in mentioned if skill not in preferred]
-    skills_score = round(55 * len(set(matching) & set(scored)) / len(scored)) if scored else 0
+    scored = required if required or groups else [skill for skill in mentioned if skill not in preferred]
+    slots = len(scored) + len(groups)
+    covered = len(set(matching) & set(scored)) + len(groups) - len(unmet_groups)
+    skills_score = round(55 * covered / slots) if slots else 0
     components = {
         "skills": skills_score, "projects": min(15, 8 * len(relevant["project"])),
         "experience": min(10, 5 * len(relevant["experience"])),
@@ -175,6 +190,7 @@ def analyze(posting: Posting, facts, preferences: Preferences, threshold):
     recommendation = "PREPARE_APPLICATION" if eligibility == "ELIGIBLE" and score >= threshold else "REVIEW"
     return {
         "eligibility": eligibility, "match_score": score, "components": components, "matching_skills": matching,
+        "alternative_skill_groups": [list(group) for group in groups],
         "required_skills": required, "missing_skills": missing, "preferred_skills": preferred,
         "relevant_projects": relevant["project"], "concerns": fail + review,
         "experience_years": years,
@@ -241,7 +257,10 @@ def shortlist(posting, preferences):
 
 
 def evaluate_saved_job(job, facts, preferences, threshold):
+    cached = job.match.get("semantic") if job.match else None
     job.match = analyze(Posting.model_validate(job.detail), facts, preferences, threshold)
+    if cached:
+        job.match = {**job.match, "semantic": cached}
     if job.status in {"DISCOVERED", "SHORTLISTED", "NEEDS_REVIEW"}:
         if job.match["eligibility"] == "NEEDS_REVIEW":
             job.status = "NEEDS_REVIEW"

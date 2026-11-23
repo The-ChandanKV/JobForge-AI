@@ -3,6 +3,9 @@ import json
 import os
 import re
 import subprocess
+from threading import Lock
+from time import monotonic, sleep
+from xml.etree import ElementTree
 from datetime import UTC, datetime
 from html import unescape
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -20,7 +23,48 @@ API = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true",
     "lever": "https://api.lever.co/v0/postings/{board}?mode=json",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true",
+    "smartrecruiters": "https://api.smartrecruiters.com/v1/companies/{board}/postings",
+    "recruitee": "https://{board}.recruitee.com/api/feeds/offers.xml",
 }
+
+
+_rate_lock = Lock()
+_next_request = {}
+MIN_SPACING = {"greenhouse": .5, "lever": .5, "ashby": .5, "smartrecruiters": .75, "recruitee": 1.0}
+
+
+def read_feed(provider, url, params=None):
+    for attempt in range(2):
+        with _rate_lock:
+            moment = monotonic()
+            next_at = max(moment, _next_request.get(provider, moment))
+            _next_request[provider] = next_at + MIN_SPACING[provider]
+        if next_at > moment:
+            sleep(next_at - moment)
+        try:
+            kwargs = {"timeout": 12, "follow_redirects": False}
+            if params is not None:
+                kwargs["params"] = params
+            with httpx.stream("GET", url, **kwargs) as response:
+                response.raise_for_status()
+                data = bytearray()
+                for block in response.iter_bytes():
+                    data.extend(block)
+                    if len(data) > 30_000_000:
+                        raise ValueError("Board response exceeds size limit")
+                return bytes(data)
+        except httpx.HTTPStatusError as exc:
+            if attempt or exc.response.status_code not in {429, 502, 503, 504}:
+                raise
+            retry_after = exc.response.headers.get("Retry-After", "")
+            if retry_after and (not retry_after.isdecimal() or int(retry_after) > 3):
+                raise
+            sleep(int(retry_after) if retry_after else 1)
+        except httpx.TransportError:
+            if attempt:
+                raise
+            sleep(1)
+    raise RuntimeError("Provider retry policy exhausted")
 
 
 def clean_html(value):
@@ -70,6 +114,32 @@ def normalize(source, raw):
         if raw.get("createdAt"):
             posted = datetime.fromtimestamp(raw["createdAt"] / 1000, UTC).isoformat()
         salary = raw.get("salaryRange") or {}
+    elif provider == "smartrecruiters":
+        sections = (raw.get("jobAd") or {}).get("sections") or {}
+        description = "".join("<h2>" + title + "</h2>" + (sections.get(key) or {}).get("text", "")
+                              for key, title in (("jobDescription", "Responsibilities"), ("qualifications", "Qualifications"),
+                                                 ("additionalInformation", "Additional Information")))
+        places = raw.get("location") or {}
+        location = places.get("fullLocation") or ", ".join(filter(None, (places.get("city"), places.get("country"))))
+        mode = "remote" if places.get("remote") else "hybrid" if places.get("hybrid") else ""
+        company = raw.get("company") or {}
+        if company.get("identifier", "").casefold() != source.board.casefold():
+            raise ValueError("Posting company does not match the verified board")
+        if not any((sections.get(key) or {}).get("text") for key in ("jobDescription", "qualifications")):
+            raise ValueError("Posting detail has no description")
+        url = raw.get("postingUrl") or raw.get("applyUrl")
+        application = raw.get("applyUrl") or url
+        employment, posted = (raw.get("typeOfEmployment") or {}).get("label"), raw.get("releasedDate")
+    elif provider == "recruitee":
+        description = (raw.get("description") or "") + "<h2>Requirements</h2>" + (raw.get("requirements") or "")
+        location = raw.get("location") or raw.get("city")
+        mode = next((value for key, value in (("remote", "remote"), ("hybrid", "hybrid"), ("on_site", "onsite"))
+                     if raw.get(key) == "true"), "")
+        slug = raw.get("slug") or ""
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", slug):
+            raise ValueError("Invalid offer slug")
+        url = application = f"https://{source.board}.recruitee.com/o/{slug}"
+        employment, posted = (raw.get("employment_type_code") or "").replace("_", " "), raw.get("published_at")
     else:
         description = raw.get("descriptionHtml") or raw.get("descriptionPlain")
         location = ", ".join(dict.fromkeys(filter(None, [
@@ -99,7 +169,7 @@ def normalize(source, raw):
     annual = str(salary.get("interval", "")).lower() in {"year", "yearly", "annual", "per-year"}
     return Posting(
         source_key=f"{provider}:{source.board.lower()}:{identifier}", source=provider, company=source.company,
-        role=raw.get("title") or raw.get("text") or "", location=location or "",
+        role=raw.get("title") or raw.get("text") or raw.get("name") or "", location=location or "",
         employment=employment, work_mode=mode, posted=posted,
         deadline=raw.get("application_deadline") if provider == "greenhouse" else None, url=safe_url(url),
         apply_url=safe_url(application), description=clean_html(description)[:100_000],
@@ -119,15 +189,36 @@ def fetch_board(source):
                         "Build reliable services and improve API testing. Open to graduates.",
         )], True
     url = API[source.provider].format(board=source.board)
-    with httpx.stream("GET", url, timeout=15, follow_redirects=False) as response:
-        response.raise_for_status()
-        data = bytearray()
-        for block in response.iter_bytes():
-            data.extend(block)
-            if len(data) > 30_000_000:
-                raise ValueError("Board response exceeds size limit")
-    payload = json.loads(data)
-    rows = payload if source.provider == "lever" else payload["jobs"]
+    complete = True
+    if source.provider == "smartrecruiters":
+        page = json.loads(read_feed(source.provider, url, {"limit": 12, "offset": 0, "q": source.search}))
+        entries = page["content"]
+        complete = not source.search.strip() and page.get("totalFound") == len(entries)
+        rows = []
+        for entry in entries[:12]:
+            identifier = str(entry.get("id") or "")
+            if not re.fullmatch(r"[A-Za-z0-9-]{1,80}", identifier):
+                complete = False
+                continue
+            try:
+                row = json.loads(read_feed(source.provider, url + "/" + identifier))
+                if row.get("active") is True and row.get("visibility", "").upper() == "PUBLIC":
+                    rows.append(row)
+                else:
+                    complete = False
+            except (httpx.HTTPError, ValueError):
+                complete = False
+    elif source.provider == "recruitee":
+        data = read_feed(source.provider, url).decode("utf-8-sig")
+        if re.search(r"<!\s*(?:DOCTYPE|ENTITY)", data, re.I):
+            raise ValueError("Unsafe board XML")
+        root = ElementTree.fromstring(data)
+        if root.tag != "offers":
+            raise ValueError("Unexpected job feed XML")
+        rows = [{field.tag: field.text or "" for field in offer} for offer in root.findall("offer")]
+    else:
+        payload = json.loads(read_feed(source.provider, url))
+        rows = payload if source.provider == "lever" else payload["jobs"]
     if not isinstance(rows, list):
         raise ValueError("Expected a list of postings")
     result = []
@@ -136,11 +227,10 @@ def fetch_board(source):
             continue
         try:
             result.append(normalize(source, raw))
-        except (ValidationError, ValueError, OverflowError):
+        except (ValidationError, ValueError, OverflowError, TypeError, AttributeError):
             continue
-    return result, len(result) == len(rows) or source.provider == "ashby" and len(result) == sum(
-        row.get("isListed") is not False for row in rows
-    )
+    expected = sum(row.get("isListed") is not False for row in rows) if source.provider == "ashby" else len(rows)
+    return result, complete and len(result) == expected
 
 
 def canonicalize(url):

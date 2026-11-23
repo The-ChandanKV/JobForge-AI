@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import re
 import subprocess
@@ -65,6 +67,11 @@ def compile_claims(claims, bullets):
     return [{**f, "value": rendered.get(f["id"], f["value"])} for f in claims]
 
 
+def posting_digest(job):
+    fields = [job.role, job.company, job.detail.get("location"), job.detail["description"]]
+    return hashlib.sha256(json.dumps(fields, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def quality_report(job, rendered, bullets, checks):
     corpus = "\n".join(fact["value"] for fact in rendered)
     skills = job.match.get("matching_skills", [])
@@ -78,6 +85,9 @@ def quality_report(job, rendered, bullets, checks):
         "long_bullets": sum(len(bullet["text"].split()) > 32 for bullet in bullets),
         "page_overflow": checks["pages"] > 1,
         "formatting_warnings": checks["warnings"],
+        "sections_present": [title for category, title in SECTIONS.items() if any(fact["category"] == category for fact in rendered)],
+        "page_count": checks["pages"], "fonts_detected": checks.get("fonts", []),
+        "pdf_link_annotations": checks.get("links", 0),
     }
 
 
@@ -127,7 +137,22 @@ def compile_pdf(tex, expected, bootstrap=False):
         log = work / "resume.log"
         if log.exists() and "Overfull" in log.read_text(encoding="utf-8", errors="replace"):
             warnings.append("Tectonic reported overfull content. Inspect the PDF margins.")
-        return document.read_bytes(), {"pages": page_count, "warnings": warnings, "text_length": len(extracted)}
+        font_names = set()
+        links = 0
+        for page in reader.pages:
+            resources = page.get("/Resources")
+            if resources:
+                font_table = resources.get_object().get("/Font")
+                if font_table:
+                    for reference in font_table.get_object().values():
+                        name = reference.get_object().get("/BaseFont")
+                        if name:
+                            font_names.add(str(name).lstrip("/").split("+")[-1])
+            links += sum(ref.get_object().get("/Subtype") == "/Link" for ref in page.get("/Annots", []))
+        if not font_names:
+            warnings.append("No named fonts were detected in the PDF resources.")
+        return document.read_bytes(), {"pages": page_count, "warnings": warnings, "text_length": len(extracted),
+                                       "fonts": sorted(font_names), "links": links}
 
 
 def generate(db, job, facts, options, request):
@@ -156,7 +181,10 @@ def generate(db, job, facts, options, request):
                 rows = relevant
         selected.extend(rows[:limits.get(category, 6)])
     claims = [name_fact, *contact, *selected]
-    bullets = [{"fact_id": f["id"], "text": edit_bullet(f["value"])} for f in selected
+    bullets = [{"fact_id": f["id"], "text": edit_bullet(f["value"]),
+                "reason": "Removed first-person or list formatting without changing claims."
+                          if edit_bullet(f["value"]) != f["value"] else "Retained verified source wording.",
+                "skills": [skill for skill in keywords if has_skill(f["value"], skill)]} for f in selected
                if f["category"] in {"experience", "project"}]
     rendered = compile_claims(claims, bullets)
     sections = [(title, [f for f in rendered if f["category"] == category])
@@ -166,7 +194,7 @@ def generate(db, job, facts, options, request):
     tex = TEMPLATES.get_template(request.template + ".tex").render(name=name, contact=contact, sections=sections)
     pdf, checks = compile_pdf(tex, rendered)
     version = Resume(job_id=job.id, parent_id=request.parent_id, template=request.template, tex=tex, pdf=pdf,
-                     report={**checks, "claims": claims, "bullets": bullets, "ai": meta,
+                     report={**checks, "claims": claims, "bullets": bullets, "ai": meta, "posting_digest": posting_digest(job),
                              "quality": quality_report(job, rendered, bullets, checks)})
     db.add(version)
     db.add(Log(kind="resume", message="Resume PDF validated", detail={"job_id": job.id, "ai": meta, "pages": checks["pages"]}))

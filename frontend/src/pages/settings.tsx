@@ -6,10 +6,11 @@ import type { Fact, Options, Preferences, Profile, Source, Upload } from "../api
 import { date, label, searchMatch } from "../domain";
 import { Details, Empty, ErrorNotice, Heading, Panel, Status, useResource } from "../shared";
 import type { PageProps } from "../shared";
+import { EmployerDirectory } from "./employers";
 import { UploadForm } from "./studio";
 
 const categories = ["personal", "education", "experience", "skill", "project", "authorization", "certification", "other"];
-const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_roles", "excluded_keywords", "target_companies", "excluded_companies"];
+const preferenceLists = ["roles", "locations", "work_modes", "employment", "levels", "career_tracks", "excluded_roles", "excluded_keywords", "target_companies", "priority_companies", "industries", "excluded_companies"];
 const suggestedRoles = ["Software Engineer I", "Graduate Software Engineer", "Associate Software Engineer",
   "Backend Developer", "Full Stack Developer", "Python Developer", "Data Engineer", "AI/ML Engineer",
   "Entry-level Software Developer", "Software Engineering Intern"];
@@ -138,7 +139,8 @@ const numbers = {
 } as const;
 const toggles = ["enabled", "retry_failed_jobs", "exception_notifications", "desktop_notifications", "approval_email"] as const;
 
-export function Settings({ state, mutate, busy }: PageProps) {
+export function Settings(props: PageProps) {
+  const {state, mutate, busy} = props;
   const [draft, setDraft] = useState<Partial<Options>>({});
   const current = {...state.options, ...draft};
   const sources = current.sources;
@@ -156,6 +158,7 @@ export function Settings({ state, mutate, busy }: PageProps) {
     <Heading title="Settings" description="Configure matching, discovery sources, resume generation, and automation.">
       <Button type="submit" form="settings-form" disabled={busy || !Object.keys(draft).length}><Save size={16}/> Save settings</Button>
     </Heading>
+    <EmployerDirectory {...props}/>
     <form id="settings-form" className="content-grid" onSubmit={async event => {
       event.preventDefault();
       if (await mutate<Options>("/api/settings", "PUT", current, "Settings saved.")) setDraft({});
@@ -177,6 +180,8 @@ export function Settings({ state, mutate, busy }: PageProps) {
               <option value="">Server default</option><option value="rules">Rules only</option><option value="ollama">Ollama</option>
               <option value="openai">OpenAI</option><option value="anthropic">Anthropic</option>
             </select></label>
+            <label>Local semantic ranking model<input maxLength={150} value={current.semantic_model ?? ""} onChange={event => update("semantic_model", event.target.value)}/></label>
+            <label>Local tailoring model<input maxLength={150} value={current.tailoring_model ?? ""} onChange={event => update("tailoring_model", event.target.value)}/></label>
             <label>Model override<input maxLength={150} value={current.model} onChange={event => update("model", event.target.value)}/></label>
             <Link className="text-link" to="/resume-studio">Choose a template in Resume Studio</Link>
           </div>
@@ -186,9 +191,10 @@ export function Settings({ state, mutate, busy }: PageProps) {
       <Panel title="Job boards" caption="Configure discovery by board slug. Employer submission credentials are managed on the server.">
         {sources.map((source, index) => <div key={index} className="toolbar source-row">
           <label>Provider<select value={source.provider} onChange={event => sourceChange(index, {provider:event.target.value})}>
-            {["greenhouse", "lever", "ashby", "mock"].map(name => <option key={name}>{name}</option>)}
+            {["greenhouse", "lever", "ashby", "smartrecruiters", "recruitee", "mock"].map(name => <option key={name}>{name}</option>)}
           </select></label>
           <label>Board slug<input required pattern="[A-Za-z0-9_\-]{1,80}" value={source.board} onChange={event => sourceChange(index, {board:event.target.value})}/></label>
+          {source.provider === "smartrecruiters" && <label>Search terms<input maxLength={100} value={source.search ?? "software"} onChange={event => sourceChange(index, {search:event.target.value})}/></label>}
           <label>Company<input required maxLength={150} value={source.company} onChange={event => sourceChange(index, {company:event.target.value})}/></label>
           <label className="check"><input type="checkbox" checked={source.enabled} onChange={event => sourceChange(index, {enabled:event.target.checked})}/> Enabled</label>
           <Button type="button" variant="ghost" size="icon" aria-label={"Remove board " + (index + 1)} onClick={() => update("sources", sources.filter((_, position) => index !== position))}><Trash2 size={15}/></Button>

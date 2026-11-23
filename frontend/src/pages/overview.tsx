@@ -52,6 +52,11 @@ export function Overview({ state, mutate, busy }: PageProps) {
   const recommendations = [...qualified].filter(job => job.available && !["SKIPPED", "CLOSED"].includes(job.status))
     .sort((a, b) => (b.match.match_score ?? 0) - (a.match.match_score ?? 0)).slice(0, 5);
   const trend = dailyTrend(state);
+  const priority = new Set(Array.isArray(state.profile.preferences.priority_companies) ?
+    state.profile.preferences.priority_companies.map(company => company.toLowerCase()) : []);
+  const hiring = [...new Set(state.jobs.filter(job => job.available && job.source !== "mock" &&
+    priority.has(job.company.toLowerCase())).map(job => job.company))];
+  const newThisHour = state.jobs.filter(job => job.source !== "mock" && Date.parse(job.created) >= Date.now() - 3600000).length;
   return <>
     <Heading title="Overview" description="Track your job search, application activity, and automation in one place.">
       <Button disabled={busy || state.worker.pending > 0} onClick={() => void mutate("/api/runs", "POST", undefined, "Automation run queued.")}><Play size={15}/> Run now</Button>
@@ -60,7 +65,19 @@ export function Overview({ state, mutate, busy }: PageProps) {
       <Link className="metric-card" key={name} to={to}><div className="metric-top"><span>{name}</span><Icon size={17}/></div>
         <strong className="metric-value">{value}</strong><span className="metric-note">{note}</span></Link>
     )}</section>
+    {!state.profile_readiness.ready && <p><Link className="text-link" to="/profile">Verify career evidence for real preparation</Link></p>}
+    {!state.options.sources.some(source => source.enabled && source.provider !== "mock") && <p><Link className="text-link" to="/settings">Verify and enable employer boards</Link></p>}
     <div className="dashboard-grid">
+      <Panel title="Career activity" caption="Current counts from saved records">
+        <dl className="details">
+          <div><dt>New jobs this hour</dt><dd>{newThisHour}</dd></div>
+          <div><dt>Priority companies hiring</dt><dd>{hiring.length ? hiring.join(", ") : "None in the current listings"}</dd></div>
+          <div><dt>Resumes compiled today</dt><dd>{state.daily.compiled}</dd></div>
+          <div><dt>Applications requiring information</dt><dd>{state.applications.filter(app => app.summary.missing?.length).length}</dd></div>
+          <div><dt>Employer responses recorded</dt><dd>{state.applications.filter(app => ["INTERVIEW", "OFFER", "REJECTED"].includes(app.status)).length}</dd></div>
+          <div><dt>Interview opportunities</dt><dd>{state.applications.filter(app => app.status === "INTERVIEW").length}</dd></div>
+        </dl>
+      </Panel>
       <Panel title="Application trend" caption={"New application records by day · " + state.options.timezone}>
         <Distribution rows={trend.map(row => ({ name: row.name.slice(5), count: row.applications }))}/>
       </Panel>

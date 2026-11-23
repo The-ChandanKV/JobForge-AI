@@ -40,6 +40,8 @@ class Preferences(BaseModel):
     excluded_keywords: list[str] = []
     excluded_roles: list[str] = Field(default_factory=list, max_length=40)
     target_companies: list[str] = []
+    priority_companies: list[str] = Field(default_factory=list, max_length=40)
+    industries: list[str] = Field(default_factory=list, max_length=30)
     excluded_companies: list[str] = []
     min_salary: int | None = Field(default=None, ge=0)
     salary_currency: str = Field(default="", max_length=3)
@@ -64,10 +66,11 @@ class ProfileInput(BaseModel):
 
 
 class Source(BaseModel):
-    provider: Literal["greenhouse", "lever", "ashby", "mock"]
+    provider: Literal["greenhouse", "lever", "ashby", "smartrecruiters", "recruitee", "mock"]
     board: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
     company: str = Field(min_length=1, max_length=150)
     enabled: bool = True
+    search: str = Field(default="software", max_length=100)
 
 
 class PolicyRequest(BaseModel):
@@ -122,6 +125,8 @@ class Options(BaseModel):
     mode: Literal["MANUAL", "ASSISTED", "AUTHORIZED_AUTO"] = "ASSISTED"
     provider: Literal["ollama", "rules", "anthropic", "openai"] | None = None
     model: str = Field(default="", max_length=150)
+    semantic_model: str = Field(default="", max_length=150)
+    tailoring_model: str = Field(default="", max_length=150)
     timezone: str = "Asia/Kolkata"
     sources: list[Source] = Field(default_factory=list, max_length=20)
 
