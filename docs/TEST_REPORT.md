@@ -1,5 +1,20 @@
 # Test report
 
+## Phase 6 intelligent discovery and readiness
+
+The starting branch and GitHub heads contained Phase 4 at commit 8a1cfa7 and no separate Phase 5 branch or implementation. All **47** existing tests passed before changes. The Phase 6 full Windows run had **51 passed, zero failures**, with the existing Starlette test-client warning. An earlier targeted run caught a missing source-model import, which was corrected before the full run.
+
+- Frontend lint, three Vitest tests, TypeScript, the production build, and the Chromium flows passed. Browser coverage includes the new Job Intelligence route and unverified boards staying disabled.
+- Added regression tests for normalization and trusted provider URLs, employer verification and opt-in, feedback persistence, alternative skill requirements, strict semantic output, and readiness for manual forms and blocked consent.
+- The existing hourly preparation, worker recovery, cross-provider deduplication, provenance, exact approval, bulk approval, and synthetic receipt coverage passed.
+- A fresh temporary SQLite migration and Alembic check passed. The installed database remains at revision 0004.
+- Read-only public feed tests normalized 12 Bosch Group postings through SmartRecruiters and 12 The Codest postings through Recruitee. No sources or private profile facts were changed in the installed workspace.
+- Isolated Tectonic generated and validated one synthetic PDF in 1.88 seconds. The PDF had one page, two named fonts and zero unsupported claims.
+- Chromium rendered the installed Job Intelligence, employer directory and source health views. Both registered Windows tasks were running. The worker heartbeat advanced with Chromium closed, the schedule remained 60 minutes, and Ollama was available.
+- Real applicant readiness is still missing verified career evidence. There are no target-role or location preferences, enabled employer boards, or live applications waiting for review. Dry-run stayed enabled and no real employer submission was attempted.
+
+Changed files are grouped in the [feature branch](https://github.com/The-ChandanKV/JobForge-AI/tree/feat/intelligent-job-discovery). [Public discovery](INTELLIGENT_JOB_DISCOVERY.md) · [Reviewed benchmark](MATCHING_ENGINE.md) · [Resume optimization](RESUME_OPTIMIZATION.md) · [Readiness checks](APPLICATION_READINESS.md)
+
 ## Phase 4 real-world readiness
 
 The final Windows regression run on November 23, 2026 collected and passed **47 pytest tests**, with one existing Starlette test-client deprecation warning. The 41-test entry below describes the original approval backend. Phase 3 React brought the count to 43, and Phase 4 added four cases. ESLint, three Vitest tests, TypeScript, the Vite production build, and both Chromium end-to-end flows passed.

@@ -1,5 +1,10 @@
 # JobForge AI
 
+## Intelligent job discovery
+
+Verify and preview employer feeds in Settings. Job Intelligence explains the match, lists missing evidence, and shows preparation readiness. [Discovery](docs/INTELLIGENT_JOB_DISCOVERY.md) · [Matching](docs/MATCHING_ENGINE.md) · [Resume quality](docs/RESUME_OPTIMIZATION.md) · [Readiness](docs/APPLICATION_READINESS.md)
+
+
 ## Real-world readiness
 
 Use Profile to verify your source facts, then choose public employer boards in Settings. The worker prepares eligible applications for review. [Onboarding and manual handoff](docs/REAL_WORLD_READINESS.md) · [Public benchmark](docs/JOB_MATCHING_EVALUATION.md) · [Reliability report](docs/24_HOUR_RELIABILITY.md)

@@ -1,5 +1,10 @@
 # Setup
 
+## Enable intelligent discovery
+
+Verify career evidence and set preferences in Profile. Open Settings → Discover employers, preview a verified source, then enable monitoring. Optional local model names configure semantic ranking and tailoring. The rules path remains available if a model is absent. [Discovery workflow](INTELLIGENT_JOB_DISCOVERY.md)
+
+
 ## Prepare a real workspace
 
 Import and verify name, email, and at least one career fact in Profile. Configure and enable employer boards in Settings. The desktop notification channel runs through the native Windows shell in an interactive session. Run the privacy check before pushing and check the observation window from Automation. [Readiness](REAL_WORLD_READINESS.md) · [Privacy audit](SECURITY_AUDIT.md)

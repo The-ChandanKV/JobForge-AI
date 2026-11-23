@@ -1,5 +1,10 @@
 # Implementation status
 
+## Phase 6
+
+Implemented verified employer discovery, SmartRecruiters and Recruitee public feeds, source health, a bounded local semantic ranking option, durable job feedback, resume quality evidence, and a separate readiness checklist. Employer submission authorization is unchanged. The installed profile and board selections still need activation. [Verification](docs/TEST_REPORT.md)
+
+
 ## Phase 4
 
 Implemented verified onboarding, readiness gating, evidence-prioritized resume tailoring, manual handoff, rejection feedback, native Windows notifications, and durable reliability reporting. The public benchmark contains 36 postings and has no human-reviewed labels. Installation observation is underway. [Verification](docs/TEST_REPORT.md)

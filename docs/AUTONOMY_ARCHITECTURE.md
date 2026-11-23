@@ -1,5 +1,10 @@
 # Autonomy architecture
 
+## Intelligent hourly discovery
+
+The worker observes bounded public employer feeds, records source health, and keeps incomplete reads from retiring unseen jobs. Repeated fetches preserve aliases and immutable application approvals. Local semantic ranking is bounded and cached. Job readiness projects verifiable preparation without modifying application state. [Matching](MATCHING_ENGINE.md) · [Readiness](APPLICATION_READINESS.md)
+
+
 ## Phase 4 readiness
 
 Discovery and scoring continue when core evidence is missing. Scheduled real preparation waits for verified name, email, and career evidence. The API observes stale worker heartbeats while the scheduler runs independently. Configured cadence and run telemetry drive the rolling 24-hour report. [Reliability methodology](24_HOUR_RELIABILITY.md)
