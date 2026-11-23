@@ -57,6 +57,14 @@ export function Overview({ state, mutate, busy }: PageProps) {
   const hiring = [...new Set(state.jobs.filter(job => job.available && job.source !== "mock" &&
     priority.has(job.company.toLowerCase())).map(job => job.company))];
   const newThisHour = state.jobs.filter(job => job.source !== "mock" && Date.parse(job.created) >= Date.now() - 3600000).length;
+  const localDay = new Intl.DateTimeFormat("en-CA", {timeZone: state.options.timezone, year: "numeric", month: "2-digit", day: "2-digit"});
+  const today = localDay.format(new Date());
+  const todaysMatches = qualified.filter(job => job.available && job.source !== "mock" &&
+    !["SKIPPED", "CLOSED"].includes(job.status) && Number.isFinite(Date.parse(job.created)) &&
+    localDay.format(new Date(job.created)) === today)
+    .sort((left, right) => (right.match.match_score ?? 0) - (left.match.match_score ?? 0)).slice(0, 5);
+  const jobById = new Map(state.jobs.map(job => [job.id, job]));
+  const realApplications = state.applications.filter(app => !app.summary.simulation && jobById.get(app.job_id)?.source !== "mock");
   return <>
     <Heading title="Overview" description="Track your job search, application activity, and automation in one place.">
       <Button disabled={busy || state.worker.pending > 0} onClick={() => void mutate("/api/runs", "POST", undefined, "Automation run queued.")}><Play size={15}/> Run now</Button>
@@ -73,10 +81,17 @@ export function Overview({ state, mutate, busy }: PageProps) {
           <div><dt>New jobs this hour</dt><dd>{newThisHour}</dd></div>
           <div><dt>Priority companies hiring</dt><dd>{hiring.length ? hiring.join(", ") : "None in the current listings"}</dd></div>
           <div><dt>Resumes compiled today</dt><dd>{state.daily.compiled}</dd></div>
+          <div><dt>Real applications ready for review</dt><dd>{realApplications.filter(app => app.review_status === "READY_FOR_REVIEW").length}</dd></div>
+          <div><dt>Real submissions with confirmation</dt><dd>{realApplications.filter(app => app.confirmation).length}</dd></div>
           <div><dt>Applications requiring information</dt><dd>{state.applications.filter(app => app.summary.missing?.length).length}</dd></div>
           <div><dt>Employer responses recorded</dt><dd>{state.applications.filter(app => ["INTERVIEW", "OFFER", "REJECTED"].includes(app.status)).length}</dd></div>
           <div><dt>Interview opportunities</dt><dd>{state.applications.filter(app => app.status === "INTERVIEW").length}</dd></div>
         </dl>
+      </Panel>
+      <Panel title="Best matches today" caption="Qualified real postings first saved today">
+        {todaysMatches.length ? <div className="match-list">{todaysMatches.map(job =>
+          <Link className="match-row" key={job.id} to={"/intelligence?job=" + job.id}><Company job={job}/><span className="score-pill">{job.match.match_score}%</span></Link>
+        )}</div> : <Empty>No qualified real postings have been saved today.</Empty>}
       </Panel>
       <Panel title="Application trend" caption={"New application records by day · " + state.options.timezone}>
         <Distribution rows={trend.map(row => ({ name: row.name.slice(5), count: row.applications }))}/>
