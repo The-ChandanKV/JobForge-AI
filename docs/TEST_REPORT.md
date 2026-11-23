@@ -1,5 +1,13 @@
 # Test report
 
+## Phase 10 final release validation
+
+- Baseline pytest passed 56 tests. The final Windows full run passed 62 tests, and the subsequently added provider retry regression passed in a focused run. Across those 63 tests there were zero failures or skips. The existing Starlette test-client deprecation warning remains.
+- Three Vitest tests, lint, TypeScript and production build passed. Both isolated Playwright suites passed. A ten-route live Chrome smoke test confirmed the Activation capability and daily workflow pages.
+- A fresh SQLite database migrated to 0004 with no pending schema operations. The live integrity and foreign key checks passed. The latest encrypted online backup restored into an isolated file with matching profile, upload and job rows. Tests covered WAL, corrupt snapshots, overwrite refusal and closed-connection recovery.
+- The Windows watchdog recovered the dashboard and the worker after an idle forced exit in 57.3 seconds. An isolated test verified cooperative shutdown preserves the run and releases the lease. Restart, source failure, missing-model fallback, compilation failure and approval-uncertainty tests passed.
+- All five public discovery provider types were checked. No real employer write was sent. An isolated real-JD preview with the verified profile produced one page, three validated contact links, and zero unsupported claims. Real eligible-job preparation remains unobserved. [Final release report](FINAL_RELEASE_REPORT.md)
+
 ## Phase 9 workflow validation
 
 - Windows pytest passed **56 tests** with the existing Starlette test-client warning. This included both Playwright suites, real Ollama against synthetic facts, scheduler crash and lease recovery, source failure and bounded retry, interrupted preparation with PDF reuse, and exact approval and stale-payload safeguards.

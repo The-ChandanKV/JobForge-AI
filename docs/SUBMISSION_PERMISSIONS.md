@@ -4,6 +4,8 @@ JobForge starts in `AUTONOMOUS_PREPARATION` with dry-run enabled. Discovery, mat
 
 ## Production integration gate
 
+The Activation capability **Live submission available** describes configured access to the verified enabled board. It leaves the per-application approval and exact snapshot checks in force. The local release validation kept dry-run enabled. [Release status](FINAL_RELEASE_REPORT.md)
+
 The Greenhouse endpoint is restricted to the credentialed employer board. Before enabling production, retain the employer's documented authorization for this API route, a successful employer-approved sandbox contract test including acknowledgment and timeout handling, and a private reference to that record. The operator sets `JOBFORGE_GREENHOUSE_BOARD`, `JOBFORGE_GREENHOUSE_KEY`, `JOBFORGE_GREENHOUSE_AUTHORIZED=true`, and `JOBFORGE_GREENHOUSE_VERIFICATION_REFERENCE`. The software checks the configured reference and board at runtime. The operator remains responsible for validating the evidence itself. [Greenhouse Job Board API](https://docs.greenhouse.io/job-board.html)
 
 On this installation the employer adapter was tested with mocked transport and production submission stays off. The preflight accepts standard verified contact fields and the selected PDF. Unknown required screening questions, legal attestations, consent and unexpected form controls require user action. Public boards, arbitrary web pages, login gates and CAPTCHAs cannot authorize dispatch.
@@ -18,3 +20,5 @@ On this installation the employer adapter was tested with mocked transport and p
 Standing policies from earlier versions are retained as historical configuration. The current worker accepts final approval tasks exclusively. The workspace daily cap bounds Greenhouse dispatch attempts in the selected timezone. Lever, Ashby and other unconfigured portals use a manual handoff. [Approval workflow and provider matrix](APPROVAL_AND_SUBMISSION.md)
 
 The application records one durable attempt before the external POST. An explicit receipt is required for confirmed status. A timeout, ambiguous acknowledgment, or crash after that checkpoint routes to reconciliation. The adapter never retries that POST automatically. An operator can enter a genuine employer confirmation reference after independent verification.
+
+An old backup may predate an employer request or receipt. Keep the worker stopped while reviewing a recovered database, leave dry-run enabled, and reconcile affected records before issuing new approvals. [Recovery procedure](BACKUP_AND_RESTORE.md)

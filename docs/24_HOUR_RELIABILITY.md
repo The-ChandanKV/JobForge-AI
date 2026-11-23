@@ -15,3 +15,5 @@ The scheduled records reported zero newly saved jobs, eligible jobs, PDFs, and p
 Both existing Windows Task Scheduler tasks were running and one worker process tree advanced its heartbeat. The application continues collecting observations without an open browser or Codex session. Isolated fault-injection tests covered process crash, lease expiry, restart recovery, source failures, and preparation retry budgets.
 
 The elapsed observation, expected runs, actual runs, missed slots, success and failure counts, and workload metrics are displayed live. Physical sleep, reboot, and a complete 24-hour runtime remain outside this verification.
+
+The Phase 10 sample reached 10.883 hours on November 23, 2026 at 23:34 IST. Six scheduled runs completed, five slots were missed, eight worker starts and nine heartbeat gaps were recorded, and Ollama logged zero unavailable transitions. Both idle task processes recovered through the installed watchdog after a deliberate exit in 57.3 seconds. A subsequent dry-run completed in 14.92 seconds. [Final validation](FINAL_RELEASE_REPORT.md)

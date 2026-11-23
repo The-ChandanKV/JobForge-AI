@@ -79,10 +79,13 @@ def clean_html(value):
 
 
 def safe_url(value):
-    if not value:
+    if not value or any(character.isspace() or ord(character) < 32 or character == "\\" for character in value):
         return None
-    parts = urlsplit(value)
-    return value if parts.scheme == "https" and parts.hostname and not parts.username and not parts.password else None
+    try:
+        parts = urlsplit(value)
+        return value if parts.scheme == "https" and parts.hostname and parts.username is None and parts.port in (None, 443) else None
+    except ValueError:
+        return None
 
 
 def normalize(source, raw):

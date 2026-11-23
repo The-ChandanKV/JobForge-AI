@@ -184,7 +184,7 @@ class Log(Base):
     created: Mapped[str] = mapped_column(default=now)
 
 
-engine = create_engine(DATABASE, pool_pre_ping=True)
+engine = create_engine(DATABASE, pool_pre_ping=True, hide_parameters=True)
 Session = sessionmaker(engine, expire_on_commit=False)
 
 

@@ -26,7 +26,7 @@ def private_path(name):
     return (
         any(part in {"data", "private", "resumes", "logs", "node_modules", ".venv"} for part in path.parts[:-1])
         or (path.name.startswith(".env") and path.name != ".env.example")
-        or bool(re.search(r"\.(?:sqlite3?|db)(?:-wal|-shm)?$|\.(?:pdf|log|pem|key|pfx)$", path.name, re.I))
+        or bool(re.search(r"\.(?:sqlite3?|db)(?:-wal|-shm)?$|\.(?:jfb|pdf|log|pem|key|pfx)$", path.name, re.I))
     )
 
 

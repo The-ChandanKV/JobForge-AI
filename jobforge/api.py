@@ -383,7 +383,9 @@ def confirm_personal_activation(payload: PersonalActivation):
 @app.get("/api/activation", dependencies=AUTH)
 def activation_status():
     with Session() as db:
-        return activation.snapshot(db)
+        options = Options.model_validate(db.get(Settings, 1).options)
+        return {**activation.snapshot(db), "capability": activation.capability(
+            db, worker_status(db, options), greenhouse.verified_board())}
 
 
 @app.post("/api/activation/run", status_code=202, dependencies=AUTH)

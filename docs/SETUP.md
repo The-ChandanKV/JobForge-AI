@@ -25,6 +25,8 @@ Install Python 3.11 or newer, Node.js 20 or newer for supported URL intake, and 
 
 ## Windows
 
+Back up an existing workspace before updating it. Run the database integrity check and keep the verified backup private. The setup script preloads the trusted Tectonic template cache, including hyperref for new PDF contact links. [Backup commands](BACKUP_AND_RESTORE.md) · [Daily operations](OPERATIONS_GUIDE.md)
+
 From PowerShell in the project directory:
 
 ```powershell

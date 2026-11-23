@@ -13,6 +13,8 @@ def test_live_ollama_orders_verified_facts_and_compiles_pdf(db_ready):
     facts = [
         Fact(category="personal", label="Name", value="Jordan Rao", verified=True),
         Fact(category="project", label="Web service", value="Built a Python and FastAPI service.", verified=True),
+        Fact(category="personal", label="Email", value="candidate+test@example.test", verified=True),
+        Fact(category="personal", label="GitHub", value="https://github.com/synthetic_profile", verified=True),
         Fact(category="project", label="Watercolor", value="Created watercolor paintings.", verified=True),
         Fact(category="skill", label="Database", value="SQL", verified=True),
         Fact(category="experience", label="False claim", value="Managed 500 employees.", verified=False),
@@ -27,5 +29,6 @@ def test_live_ollama_orders_verified_facts_and_compiles_pdf(db_ready):
         assert resume.report["ai"]["provider"] == "ollama", resume.report["ai"]
         assert resume.report["ai"]["usage"]["output_tokens"] > 0
         assert resume.pdf.startswith(b"%PDF-") and resume.report["pages"] == 1
+        assert resume.report["contact_links_validated"] and resume.report["links"] == 2
         assert "Managed 500 employees" not in resume.tex
         assert facts[1].id in {claim["id"] for claim in resume.report["claims"]}

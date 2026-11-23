@@ -1,5 +1,9 @@
 # Implementation status
 
+## Phase 10
+
+Installed capability is **READY_FOR_REAL_PREPARATION**. Final release acceptance is **ACTIVATION_REQUIRED** because no live job has reached eligibility and preparation. Verified recovery includes an encrypted online SQLite snapshot, an isolated restore, and native Windows watchdog recovery of both services. A real public posting and verified profile produced a one-page PDF in isolation. Dry-run remains enabled and the Approval Queue is empty. [Release evidence](docs/FINAL_RELEASE_REPORT.md)
+
 ## Phase 9
 
 The installed profile is ready and seven employer boards are enabled. Two controlled real discovery cycles completed. The saved job requires eligibility review, so there are zero live PDFs, application packages, or pending approvals. Bounded source concurrency, run timings, eligibility exceptions, and manual destination checks are deployed. Local Ollama and PDF generation passed isolated fixture tests. The 24-hour observation remains in progress. [Validation](docs/PHASE_9_VALIDATION.md)

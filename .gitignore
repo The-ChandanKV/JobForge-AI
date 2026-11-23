@@ -23,4 +23,7 @@ frontend/dist/
 *.db-wal
 *.db-shm
 /job-benchmark/
+*.jfb
+*.pdf
+*.log
 

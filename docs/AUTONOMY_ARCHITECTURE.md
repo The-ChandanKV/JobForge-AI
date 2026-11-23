@@ -1,5 +1,7 @@
 # Autonomy architecture
 
+The Activation page exposes configured capability from verified profile and source evidence, the actual worker heartbeat, Ollama health, the compiler executable, and the exact authorized submission configuration. This capability check is independent of the release requirement to observe a qualified real job enter review. [Release status and criteria](FINAL_RELEASE_REPORT.md)
+
 ## First-run activation
 
 The activation admission stores its verified board identifiers on the existing run record. The worker rechecks readiness and reserves at most five eligible job IDs before compilation. Reservations persist through a recovered run. The action shares the existing worker lease, retry budget and duplicate-run protection. It does not change the hourly cadence. [First-run workflow](REAL_APPLICATION_PREPARATION.md)
@@ -24,6 +26,8 @@ Profile preferences control engineering tracks, senior title exclusions, mandato
 ## Durable records
 
 SQL stores runs, the schedule, worker lease and heartbeat, last model probe, per-job retry state, prepared payloads, final approvals, submission tasks, notifications, and receipts. The worker checks explicitly approved tasks separately from the hourly preparation schedule. The Automation page rolls up activity in the configured time zone. The worker records the previous completed day's activity in the dashboard notification center once per day.
+
+File-backed SQLite supports verified online snapshots and isolated restore. The recovery command protects the configured live database and existing restore destinations. Reconcile uncertain approvals before resuming a workspace recovered from an older snapshot. [Backup and restore](BACKUP_AND_RESTORE.md)
 
 Resume provenance links each rendered bullet to a verified fact ID and source. Ollama can rank verified candidates, and deterministic overlap prioritizes evidence matching the job. Editing removes list markers or first-person boilerplate and normalizes capitalization. The application recalculates the permitted edit before compiling. Numbers, dates, employers, technologies, and outcomes stay in the literal source wording. The PDF report records missing requirements, represented skills, long bullets, text extraction, layout warnings, and page overflow. The LaTeX editor continues to accept bounded margin edits.
 

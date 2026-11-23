@@ -15,6 +15,7 @@ from .config import ROOT, TECTONIC
 from .llm import select_facts
 from .matching import contains, has_skill, profile_field
 from .models import Log, Resume, Job
+from .providers import safe_url
 
 LATEX_CHARACTERS = {
     "\\": r"\textbackslash{}", "{": r"\{", "}": r"\}", "%": r"\%", "#": r"\#", "&": r"\&",
@@ -41,6 +42,21 @@ def escape_latex(value):
 
 
 TEMPLATES.filters["tex"] = escape_latex
+
+
+def contact_link(fact):
+    if fact["category"] != "personal":
+        return None
+    value = fact["value"].strip()
+    label = fact["label"].casefold()
+    if label == "email" and re.fullmatch(r"[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", value):
+        return "mailto:" + value
+    if label in {"github", "linkedin", "portfolio"} and re.fullmatch(r"[A-Za-z0-9:/._@+-]+", value):
+        return safe_url(value)
+    return None
+
+
+TEMPLATES.filters["contact_link"] = contact_link
 
 
 def word_key(value):
@@ -96,7 +112,7 @@ def quality_report(job, rendered, bullets, checks):
     }
 
 
-def compile_pdf(tex, expected, bootstrap=False):
+def compile_pdf(tex, expected, bootstrap=False, *, expected_links=None):
     with TemporaryDirectory(prefix="jobforge-tex-") as folder:
         work = Path(folder)
         source = work / "resume.tex"
@@ -143,7 +159,7 @@ def compile_pdf(tex, expected, bootstrap=False):
         if log.exists() and "Overfull" in log.read_text(encoding="utf-8", errors="replace"):
             warnings.append("Tectonic reported overfull content. Inspect the PDF margins.")
         font_names = set()
-        links = 0
+        links = []
         for page in reader.pages:
             resources = page.get("/Resources")
             if resources:
@@ -153,11 +169,18 @@ def compile_pdf(tex, expected, bootstrap=False):
                         name = reference.get_object().get("/BaseFont")
                         if name:
                             font_names.add(str(name).lstrip("/").split("+")[-1])
-            links += sum(ref.get_object().get("/Subtype") == "/Link" for ref in page.get("/Annots", []))
+            for ref in page.get("/Annots", []):
+                annotation = ref.get_object()
+                if annotation.get("/Subtype") == "/Link":
+                    action = annotation.get("/A", {}).get("/URI")
+                    if action:
+                        links.append(str(action))
+        if expected_links is not None and set(links) != set(expected_links):
+            raise ResumeValidationError("Generated PDF contact links do not match verified destinations.")
         if not font_names:
             warnings.append("No named fonts were detected in the PDF resources.")
         return document.read_bytes(), {"pages": page_count, "warnings": warnings, "text_length": len(extracted),
-                                       "fonts": sorted(font_names), "links": links}
+                                       "fonts": sorted(font_names), "links": len(links)}
 
 
 def generate(db, job, facts, options, request):
@@ -200,13 +223,15 @@ def generate(db, job, facts, options, request):
         raise ValueError("Verify at least one education, experience, skill, or project fact.")
     tex = TEMPLATES.get_template(request.template + ".tex").render(name=name, contact=contact, sections=sections)
     started = perf_counter()
-    pdf, checks = compile_pdf(tex, rendered)
+    expected_links = [url for fact in contact if (url := contact_link(fact))]
+    pdf, checks = compile_pdf(tex, rendered, expected_links=expected_links)
     compile_seconds = round(perf_counter() - started, 4)
     requirements = {key: job.match.get(key, []) for key in
                     ("required_skills", "preferred_skills", "matching_skills", "missing_skills", "alternative_skill_groups")}
     requirements["posting_requirements"] = job.match.get("requirement_evidence", {}).get("required", [])
     version = Resume(job_id=job.id, parent_id=request.parent_id, template=request.template, tex=tex, pdf=pdf,
                      report={**checks, "claims": claims, "bullets": bullets, "ai": meta, "posting_digest": posting_digest(job),
+                             "contact_links_validated": True,
                              "timing_seconds": {"fact_selection": selection_seconds, "compile_and_validate": compile_seconds},
                              "target_requirements": requirements,
                              "quality": quality_report(job, rendered, bullets, checks)})
@@ -228,7 +253,10 @@ def recompile(db, previous, tex):
         raise ValueError("The editor accepts margin adjustments from 0.4 to 1.29 inches. Edit verified claims in Profile.")
     claims = previous.report["claims"]
     rendered = compile_claims(claims, previous.report.get("bullets", []))
-    pdf, checks = compile_pdf(tex, rendered)
+    expected_links = None
+    if previous.report.get("contact_links_validated"):
+        expected_links = [link for fact in claims if (link := contact_link(fact))]
+    pdf, checks = compile_pdf(tex, rendered, expected_links=expected_links)
     quality = {**previous.report.get("quality", {}), "text_extractable": bool(checks["text_length"]),
                "page_overflow": checks["pages"] > 1, "formatting_warnings": checks["warnings"]}
     version = Resume(job_id=previous.job_id, parent_id=previous.id, template=previous.template, tex=tex, pdf=pdf,

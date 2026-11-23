@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from jobforge import activation, api, applications, employers, matching, profile, submission, worker
-from jobforge.models import Application, Base, Log, Profile, Resume, Run, Settings, Upload
+from jobforge.models import Application, Base, Log, Profile, Resume, Run, Settings, Upload, now
 from jobforge.schemas import Fact, Options, Posting, Preferences, Source
 
 
@@ -68,6 +68,34 @@ def test_verified_board_selection_is_atomic(sessions, monkeypatch):
 
 def fixture_fact(category, label, value):
     return Fact(category=category, label=label, value=value, verified=True).model_dump()
+
+
+def test_capability_requires_configured_profile_runtime_and_explicit_live_integration(sessions, monkeypatch):
+    worker_state = {"status": "RUNNING", "model": {"provider": "ollama", "status": "AVAILABLE", "checked": now()}}
+    monkeypatch.setattr(api, "worker_status", lambda *_: worker_state)
+    monkeypatch.setattr(activation, "which", lambda _: "tectonic")
+    monkeypatch.setattr(api.greenhouse, "verified_board", lambda: None)
+    with TestClient(api.app) as client:
+        status = lambda: client.get("/api/activation").json()["capability"]["status"]
+        assert status() == "ACTIVATION_REQUIRED"
+        with sessions.begin() as db:
+            profile = db.get(Profile, 1)
+            profile.facts = [fixture_fact("personal", "Name", "Synthetic CA"),
+                             fixture_fact("personal", "Email", "fixture@example.test"), fixture_fact("skill", "Python", "Python")]
+            profile.preferences = Preferences(roles=["Software Engineer"], work_modes=["remote"]).model_dump()
+            settings = db.get(Settings, 1)
+            settings.options = Options(sources=[Source(provider="greenhouse", board="datadog", company="Datadog")]).model_dump()
+            db.add(Log(kind="board_verified", message="Fixture source proof", detail={"provider": "greenhouse", "board": "datadog"}))
+        assert status() == "READY_FOR_REAL_PREPARATION"
+        worker_state["status"] = "STOPPED"
+        assert status() == "DEVELOPMENT_READY"
+        worker_state["status"] = "RUNNING"
+        with sessions.begin() as db:
+            settings = db.get(Settings, 1)
+            settings.options = {**settings.options, "dry_run": False, "mode": "AUTHORIZED_AUTO"}
+        assert status() == "DEVELOPMENT_READY"
+        monkeypatch.setattr(api.greenhouse, "verified_board", lambda: "datadog")
+        assert status() == "LIVE_SUBMISSION_AVAILABLE"
 
 
 def test_activation_extracts_profile_links_without_project_links():

@@ -1,5 +1,9 @@
 # JobForge AI
 
+## Final release validation
+
+The installed Windows workspace is ready for dry-run real preparation. Release acceptance remains open until an eligible real posting produces a reviewed application package. Phase 10 adds verified encrypted SQLite recovery, capability checks, and validated clickable contact links in newly generated PDFs. [Final release report](docs/FINAL_RELEASE_REPORT.md) · [Daily operations](docs/OPERATIONS_GUIDE.md) · [Backup and restore](docs/BACKUP_AND_RESTORE.md) · [Known limitations](docs/KNOWN_LIMITATIONS.md)
+
 ## Workflow validation
 
 Phase 9 verified live discovery across seven employer boards. The active search produced one saved job requiring eligibility review and zero prepared applications. Open **Automation** for source health and run measurements, and **Exceptions** for job-specific blockers. [Phase 9 results](docs/PHASE_9_VALIDATION.md)

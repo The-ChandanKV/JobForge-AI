@@ -16,6 +16,7 @@ type Employer = {key: string; company: string; roles: string; locations: string;
   preview: {complete: boolean; listing_count: number; jobs: Posting[]} | null};
 type ActivationSummary = {
   checks: Record<string, boolean>; limit: number; next_run: string | null;
+  capability: {status: string; checks: Record<string, boolean>};
   latest_run: {
     status: string; finished: string | null; selected: number;
     scanned: number; discovered: number; eligible: number; compiled: number; prepared: number; errors: string[];
@@ -201,6 +202,9 @@ export function Activation({state, revision, mutate, busy}: PageProps) {
 
       <Panel title="Automation and readiness" caption="AUTONOMOUS PREPARATION + MANUAL FINAL APPROVAL">
         <ErrorNotice message={summaryError}/>
+        {summary?.capability && <><Status value={summary.capability.status}/>
+          <details><summary>Installed capability checks</summary><Details values={Object.fromEntries(
+            Object.entries(summary.capability.checks).map(([key, passed]) => [key, passed ? "Passed" : "Required"]))}/></details></>}
         <Details values={{"Scheduled interval": state.options.interval_minutes + " minutes", worker: label(state.worker.status),
           "Next scheduled run": date(summary?.next_run, state.options.timezone), "First run limit": summary?.limit ?? 5,
           "Selected boards": boardKeys.length}}/>

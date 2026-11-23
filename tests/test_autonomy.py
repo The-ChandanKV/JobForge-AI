@@ -125,6 +125,29 @@ def test_feed_failure_and_bounded_resume_retry(local_db, monkeypatch):
         assert db.scalar(select(Log).where(Log.kind == "exception"))
 
 
+def test_cooperative_shutdown_releases_lease_and_keeps_same_run(local_db, monkeypatch):
+    with local_db.begin() as db:
+        db.get(Settings, 1).options = Options(sources=[Source(provider="mock", board="shutdown", company="Fixture")]).model_dump()
+        run_id = worker.queue(db, "manual").id
+
+    def shutdown_during_fetch(_source):
+        worker.STOP.set()
+        return [], True
+
+    monkeypatch.setattr(worker, "fetch_board", shutdown_during_fetch)
+    try:
+        worker.step()
+        with local_db() as db:
+            assert db.get(Run, run_id).status == "QUEUED" and db.get(WorkerLock, 1).owner is None
+    finally:
+        worker.STOP.clear()
+    monkeypatch.setattr(worker, "fetch_board", lambda _: ([], True))
+    worker.step()
+    with local_db() as db:
+        run = db.get(Run, run_id)
+        assert run.status == "COMPLETED" and run.attempts == 2
+
+
 @pytest.mark.parametrize("name", ["missing", "timeout"])
 def test_missing_model_and_timeout_fall_back(name, monkeypatch):
     if name == "missing":

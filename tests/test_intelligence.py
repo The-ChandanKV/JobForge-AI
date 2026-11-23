@@ -1,6 +1,8 @@
 import json
+from contextlib import contextmanager
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -8,6 +10,29 @@ from jobforge import api, employers, llm, providers
 from jobforge.intelligence import application_readiness
 from jobforge.matching import analyze
 from jobforge.schemas import Fact, Posting, Preferences, Source
+
+
+def test_public_feed_retry_respects_server_wait_and_excludes_redirects(monkeypatch):
+    endpoint = providers.API["lever"].format(board="fixture")
+    calls = []
+    waits = []
+    responses = iter([(429, "2"), (200, ""), (429, "120")])
+
+    @contextmanager
+    def stream(method, url, **kwargs):
+        assert (method, url) == ("GET", endpoint) and kwargs["follow_redirects"] is False
+        calls.append(url)
+        status, retry = next(responses)
+        yield httpx.Response(status, request=httpx.Request(method, url),
+                             headers={"Retry-After": retry}, content=b"[]")
+
+    monkeypatch.setattr(providers.httpx, "stream", stream)
+    monkeypatch.setattr(providers, "sleep", waits.append)
+    monkeypatch.setattr(providers, "_next_request", {})
+    assert providers.read_feed("lever", endpoint) == b"[]"
+    with pytest.raises(httpx.HTTPStatusError):
+        providers.read_feed("lever", endpoint)
+    assert len(calls) == 3 and 2 in waits and 120 not in waits
 
 
 def test_public_providers_normalize_confirmed_details_and_xml(monkeypatch):

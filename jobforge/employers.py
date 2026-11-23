@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from .matching import minimum_years, requirement_lines
 from .models import Log, Profile
-from .providers import API, fetch_board, fold
+from .providers import API, fetch_board, fold, safe_url
 from .schemas import Options, Preferences, Source
 
 
@@ -77,7 +77,7 @@ def catalog_source(key):
 
 
 def belongs_to_employer(source, careers, url):
-    if not url:
+    if not url or not safe_url(str(url)):
         return False
     address = urlsplit(str(url))
     authority = urlsplit(careers).hostname

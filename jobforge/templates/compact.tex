@@ -1,5 +1,6 @@
 \documentclass[10pt]{article}
 \usepackage{geometry}
+\usepackage[hidelinks]{hyperref}
 \geometry{margin=0.60in}
 \renewcommand{\familydefault}{\sfdefault}
 \pagestyle{empty}
@@ -7,12 +8,16 @@
 \setlength{\parskip}{3pt}
 \begin{document}
 {\LARGE\bfseries {{ name | tex }} }\par
-{% for fact in contact %}{{ fact.value | tex }}{% if not loop.last %} \enspace | \enspace {% endif %}{% endfor %}
+{% for fact in contact %}{% set link = fact | contact_link %}{% if link %}\href{ {{- link -}} }{ {{- fact.value | tex -}} }{% else %}{{ fact.value | tex }}{% endif %}{% if not loop.last %} \enspace | \enspace {% endif %}{% endfor %}
 {% for title, facts in sections if facts %}
 
 \section*{ {{- title -}} }
+{% if title == 'Skills' %}
+{% for fact in facts %}{{ fact.value | tex }}{% if not loop.last %}, {% endif %}{% endfor %}\par
+{% else %}
 {% for fact in facts %}
 {{ fact.value | tex }}\par
 {% endfor %}
+{% endif %}
 {% endfor %}
 \end{document}

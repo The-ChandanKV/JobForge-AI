@@ -1,0 +1,9 @@
+# Known limitations
+
+- The installed workspace can discover and evaluate real jobs. Its one retained posting needs eligibility review. Production acceptance remains blocked until a genuinely eligible job yields a verified PDF, real application package and ready notification.
+- This installation is in dry-run. The Greenhouse live path requires documented employer authorization, private credentials and a successful employer-approved sandbox check. The release tests used provider mocks and local simulations for dispatch. Other employers use a user-controlled manual handoff.
+- Public feeds may omit closing dates, employment type, compensation or hard requirements. Bosch uses a bounded partial SmartRecruiters sample, so its coverage is incomplete. JobForge may retain an opening for manual eligibility review.
+- Job-source membership and historical records reduce duplicates. Official public feeds can still contain contradictory or repeated postings, and fuzzy matching cannot prove two different employers' listings represent the same vacancy.
+- Tectonic needs a provisioned bundle cache, including the trusted hyperref package for new PDF links. Verified email and simple HTTPS contact destinations are validated against actual PDF URI annotations. Other link formats remain selectable text. Long verified evidence can span multiple pages.
+- Personal data and ordinary SQLite snapshots rely on local access controls. Set the access token before use on a shared machine. Encrypted backups require a recoverable Windows DPAPI identity, and the built-in backup utility supports file-backed SQLite.
+- The installed logon tasks and watchdog recovered a forced process exit. Physical reboot, logout, sleep recovery, and a full 24-hour runtime remain unverified. Schedule gaps remain visible in Automation.
